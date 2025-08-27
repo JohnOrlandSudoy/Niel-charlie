@@ -1,89 +1,117 @@
-import React, { useState } from 'react';
-import Sidebar from './components/Layout/Sidebar';
-import Header from './components/Layout/Header';
-import Dashboard from './components/Dashboard/Dashboard';
-import InventoryManagement from './components/Inventory/InventoryManagement';
-import MenuManagement from './components/Menu/MenuManagement';
-import EmployeeManagement from './components/Employee/EmployeeManagement';
-import OrderHistory from './components/Orders/OrderHistory';
-import Payroll from './components/Payroll/Payroll';
-import Settings from './components/Settings/Settings';
-import { Bell, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import SignIn from './components/Auth/SignIn';
+import SignUp from './components/Auth/SignUp';
+import AdminLayout from './components/Layout/AdminLayout';
+import CashierLayout from './components/Layout/CashierLayout';
+import KitchenLayout from './components/Layout/KitchenLayout';
+import ErrorBoundary from './components/ErrorBoundary';
+import { useAuth } from './contexts/AuthContext';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [notifications] = useState([
-    { id: 1, type: 'warning', message: 'Low stock: Chicken (5 kg remaining)', time: '2 min ago' },
-    { id: 2, type: 'info', message: 'New order received: #ORD-12345', time: '5 min ago' },
-    { id: 3, type: 'error', message: 'Pepper out of stock - Chicken Pastil unavailable', time: '10 min ago' },
-  ]);
+// Main App component with routing
+const AppRoutes: React.FC = () => {
+  const { user, isAuthenticated, isLoading } = useAuth();
 
-  const renderCurrentPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'inventory':
-        return <InventoryManagement />;
-      case 'menu':
-        return <MenuManagement />;
-      case 'employees':
-        return <EmployeeManagement />;
-      case 'orders':
-        return <OrderHistory />;
-      case 'payroll':
-        return <Payroll />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
-        
-        <div className="flex-1 ml-64">
-          <Header notifications={notifications} />
-          
-          <main className="p-6">
-            {renderCurrentPage()}
-          </main>
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Global Notifications */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {notifications.slice(0, 3).map((notification) => (
-          <div
-            key={notification.id}
-            className={`p-4 rounded-lg shadow-lg border-l-4 bg-white transition-all duration-300 transform hover:scale-105 ${
-              notification.type === 'warning'
-                ? 'border-amber-500'
-                : notification.type === 'error'
-                ? 'border-red-500'
-                : 'border-blue-500'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              {notification.type === 'warning' ? (
-                <AlertCircle className="h-5 w-5 text-amber-500" />
-              ) : notification.type === 'error' ? (
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              ) : (
-                <Bell className="h-5 w-5 text-blue-500" />
-              )}
-              <div>
-                <p className="text-sm font-medium text-gray-900">{notification.message}</p>
-                <p className="text-xs text-gray-500">{notification.time}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+  // If not authenticated, redirect to sign in
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="/signin" element={<SignIn />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="*" element={<Navigate to="/signin" replace />} />
+      </Routes>
+    );
+  }
+
+  // If authenticated, show role-specific dashboard
+  return (
+    <Routes>
+      {/* Admin Routes */}
+      <Route 
+        path="/admin/*" 
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminLayout />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Cashier Routes */}
+      <Route 
+        path="/cashier/*" 
+        element={
+          <ProtectedRoute allowedRoles={['cashier']}>
+            <CashierLayout />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Kitchen Routes */}
+      <Route 
+        path="/kitchen/*" 
+        element={
+          <ProtectedRoute allowedRoles={['kitchen']}>
+            <KitchenLayout />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Default redirect based on user role */}
+      <Route 
+        path="/" 
+        element={
+          <Navigate 
+            to={
+              user?.role === 'admin' ? '/admin' : 
+              user?.role === 'cashier' ? '/cashier' : '/kitchen'
+            } 
+            replace 
+          />
+        } 
+      />
+
+      {/* Catch all other routes */}
+      <Route 
+        path="*" 
+        element={
+          <Navigate 
+            to={
+              user?.role === 'admin' ? '/admin' : 
+              user?.role === 'cashier' ? '/cashier' : '/kitchen'
+            } 
+            replace 
+          />
+        } 
+      />
+    </Routes>
   );
-}
+};
+
+// Main App component
+const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

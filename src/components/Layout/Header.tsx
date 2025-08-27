@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Bell, Search, User, LogOut } from 'lucide-react';
+import { Bell, Search, User } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
   notifications: Array<{
@@ -13,6 +14,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ notifications }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const { user } = useAuth();
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -69,19 +71,21 @@ const Header: React.FC<HeaderProps> = ({ notifications }) => {
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                 <User className="h-4 w-4 text-white" />
               </div>
-              <span className="text-sm font-medium text-gray-700">Admin User</span>
+              <span className="text-sm font-medium text-gray-700">
+                {user?.firstName} {user?.lastName}
+              </span>
             </button>
 
             {showProfile && (
               <div className="absolute right-0 top-12 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                <div className="p-3 border-b border-gray-200">
+                  <p className="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                </div>
                 <div className="p-2">
                   <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
                     <User className="h-4 w-4" />
                     <span>Profile</span>
-                  </button>
-                  <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
-                    <LogOut className="h-4 w-4" />
-                    <span>Sign Out</span>
                   </button>
                 </div>
               </div>

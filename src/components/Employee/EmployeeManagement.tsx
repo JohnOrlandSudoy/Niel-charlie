@@ -13,7 +13,6 @@ const EmployeeManagement: React.FC = () => {
     { label: 'Total Employees', value: 12, icon: Users, color: 'blue' },
     { label: 'On Duty Today', value: 8, icon: Clock, color: 'emerald' },
     { label: 'Off Duty', value: 4, icon: Clock, color: 'gray' },
-    { label: 'Total Payroll', value: '₱85,400', icon: DollarSign, color: 'purple' }
   ];
 
   return (
