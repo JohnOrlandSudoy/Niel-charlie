@@ -32,6 +32,8 @@ interface MenuItem {
   available: boolean;
   ingredients: string[];
   prepTime: number;
+  customizations: string[];
+  addOns: Array<{ name: string; price: number }>;
 }
 
 interface OrderItem {
@@ -40,6 +42,7 @@ interface OrderItem {
   customizations: string[];
   specialInstructions: string;
   price: number;
+  addOns?: Array<{ name: string; price: number }>;
 }
 
 interface Customer {
@@ -105,14 +108,92 @@ const CashierDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  // Mock data
+  // Enhanced Mock Data for Prototyping
   const mockMenuItems: MenuItem[] = [
-    { id: '1', name: 'Chicken Pastil', price: 180, category: 'Main Course', available: true, ingredients: ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'], prepTime: 20 },
-    { id: '2', name: 'Pork Adobo', price: 160, category: 'Main Course', available: true, ingredients: ['pork', 'soy sauce', 'vinegar', 'garlic', 'pepper'], prepTime: 35 },
-    { id: '3', name: 'Beef Steak', price: 220, category: 'Main Course', available: false, ingredients: ['beef', 'garlic', 'soy sauce', 'pepper'], prepTime: 25 },
-    { id: '4', name: 'Garlic Rice', price: 45, category: 'Side Dish', available: true, ingredients: ['rice', 'garlic', 'oil'], prepTime: 10 },
-    { id: '5', name: 'Iced Tea', price: 35, category: 'Beverage', available: true, ingredients: ['tea leaves', 'sugar', 'ice'], prepTime: 5 },
-    { id: '6', name: 'Halo-Halo', price: 120, category: 'Dessert', available: true, ingredients: ['ice', 'milk', 'sugar', 'beans'], prepTime: 8 }
+    { 
+      id: '1', 
+      name: 'Chicken Pastil', 
+      price: 180, 
+      category: 'Main Course', 
+      available: true, 
+      ingredients: ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'], 
+      prepTime: 20,
+      customizations: ['Extra Spicy', 'No Onions', 'Extra Rice'],
+      addOns: [
+        { name: 'Extra Chicken', price: 50 },
+        { name: 'Extra Rice', price: 25 },
+        { name: 'Egg', price: 15 }
+      ]
+    },
+    { 
+      id: '2', 
+      name: 'Pork Adobo', 
+      price: 160, 
+      category: 'Main Course', 
+      available: true, 
+      ingredients: ['pork', 'soy sauce', 'vinegar', 'garlic', 'pepper'], 
+      prepTime: 35,
+      customizations: ['Extra Spicy', 'Less Salty', 'Extra Sauce'],
+      addOns: [
+        { name: 'Extra Pork', price: 60 },
+        { name: 'Extra Rice', price: 25 },
+        { name: 'Egg', price: 15 }
+      ]
+    },
+    { 
+      id: '3', 
+      name: 'Beef Steak', 
+      price: 220, 
+      category: 'Main Course', 
+      available: false, 
+      ingredients: ['beef', 'garlic', 'soy sauce', 'pepper'], 
+      prepTime: 25,
+      customizations: ['Medium Rare', 'Well Done', 'Extra Spicy'],
+      addOns: [
+        { name: 'Extra Beef', price: 80 },
+        { name: 'Mashed Potatoes', price: 30 },
+        { name: 'Vegetables', price: 25 }
+      ]
+    },
+    { 
+      id: '4', 
+      name: 'Garlic Rice', 
+      price: 45, 
+      category: 'Side Dish', 
+      available: true, 
+      ingredients: ['rice', 'garlic', 'oil'], 
+      prepTime: 10,
+      customizations: ['Extra Garlic', 'Less Garlic'],
+      addOns: []
+    },
+    { 
+      id: '5', 
+      name: 'Iced Tea', 
+      price: 35, 
+      category: 'Beverage', 
+      available: true, 
+      ingredients: ['tea leaves', 'sugar', 'ice'], 
+      prepTime: 5,
+      customizations: ['Less Sweet', 'Extra Sweet', 'No Ice'],
+      addOns: [
+        { name: 'Extra Ice', price: 5 },
+        { name: 'Lemon Slice', price: 10 }
+      ]
+    },
+    { 
+      id: '6', 
+      name: 'Halo-Halo', 
+      price: 120, 
+      category: 'Dessert', 
+      available: true, 
+      ingredients: ['ice', 'milk', 'sugar', 'beans'], 
+      prepTime: 8,
+      customizations: ['Extra Sweet', 'Less Sweet', 'Extra Ice'],
+      addOns: [
+        { name: 'Extra Toppings', price: 20 },
+        { name: 'Extra Milk', price: 15 }
+      ]
+    }
   ];
 
   const mockIngredients: Ingredient[] = [
@@ -141,15 +222,28 @@ const CashierDashboard: React.FC = () => {
       orderNumber: 'ORD-2024-001',
       customer: mockCustomers[0],
       items: [
-        { menuItem: mockMenuItems[0], quantity: 2, customizations: ['Extra spicy'], specialInstructions: 'No onions', price: 360 },
-        { menuItem: mockMenuItems[4], quantity: 1, customizations: [], specialInstructions: '', price: 35 }
+        { 
+          menuItem: mockMenuItems[0], 
+          quantity: 2, 
+          customizations: ['Extra Spicy'], 
+          specialInstructions: 'No onions please', 
+          price: 410,
+          addOns: [{ name: 'Extra Chicken', price: 50 }]
+        },
+        { 
+          menuItem: mockMenuItems[4], 
+          quantity: 1, 
+          customizations: ['Less Sweet'], 
+          specialInstructions: '', 
+          price: 35 
+        }
       ],
       orderType: 'takeout',
       status: 'ready',
-      subtotal: 395,
+      subtotal: 445,
       discount: 0,
-      tax: 39.5,
-      total: 434.5,
+      tax: 44.5,
+      total: 489.5,
       paymentStatus: 'paid',
       paymentMethod: 'gcash',
       orderTime: '2 min ago',
@@ -160,8 +254,20 @@ const CashierDashboard: React.FC = () => {
       orderNumber: 'ORD-2024-002',
       customer: mockCustomers[1],
       items: [
-        { menuItem: mockMenuItems[1], quantity: 1, customizations: [], specialInstructions: '', price: 160 },
-        { menuItem: mockMenuItems[3], quantity: 2, customizations: [], specialInstructions: '', price: 90 }
+        { 
+          menuItem: mockMenuItems[1], 
+          quantity: 1, 
+          customizations: ['Extra Spicy'], 
+          specialInstructions: 'Extra sauce on the side', 
+          price: 160 
+        },
+        { 
+          menuItem: mockMenuItems[3], 
+          quantity: 2, 
+          customizations: ['Extra Garlic'], 
+          specialInstructions: '', 
+          price: 90 
+        }
       ],
       orderType: 'dine-in',
       status: 'preparing',
@@ -173,6 +279,29 @@ const CashierDashboard: React.FC = () => {
       paymentMethod: 'cash',
       orderTime: '8 min ago',
       tableNumber: 5
+    },
+    {
+      id: '3',
+      orderNumber: 'ORD-2024-003',
+      customer: mockCustomers[2],
+      items: [
+        { 
+          menuItem: mockMenuItems[5], 
+          quantity: 1, 
+          customizations: ['Extra Sweet'], 
+          specialInstructions: 'Extra toppings please', 
+          price: 140,
+          addOns: [{ name: 'Extra Toppings', price: 20 }]
+        }
+      ],
+      orderType: 'takeout',
+      status: 'pending',
+      subtotal: 140,
+      discount: 0,
+      tax: 14,
+      total: 154,
+      paymentStatus: 'unpaid',
+      orderTime: '15 min ago'
     }
   ];
 

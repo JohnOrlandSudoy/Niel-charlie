@@ -24,6 +24,8 @@ interface OrderItem {
   status: 'pending' | 'preparing' | 'ready';
   specialInstructions?: string;
   ingredients: string[];
+  customizations?: string[];
+  addOns?: string[];
 }
 
 interface Order {
@@ -35,6 +37,9 @@ interface Order {
   priority: 'high' | 'medium' | 'low';
   status: 'pending' | 'preparing' | 'ready' | 'completed';
   specialInstructions?: string;
+  orderNumber?: string;
+  orderType?: 'dine-in' | 'takeout';
+  tableNumber?: number | null;
 }
 
 interface Ingredient {
@@ -127,21 +132,28 @@ const KitchenDashboard: React.FC = () => {
           prepTime: 20, 
           status: 'preparing',
           specialInstructions: 'Extra spicy, no onions',
-          ingredients: ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic']
+          ingredients: ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'],
+          customizations: ['Extra Spicy', 'No Onions'],
+          addOns: ['Extra Chicken']
         },
         { 
           name: 'Iced Tea', 
           quantity: 1, 
           prepTime: 5, 
           status: 'ready',
-          ingredients: ['tea leaves', 'sugar', 'ice']
+          ingredients: ['tea leaves', 'sugar', 'ice'],
+          customizations: ['Less Sweet'],
+          addOns: []
         }
       ], 
-      total: 425, 
+      total: 489.5, 
       orderTime: '2 min ago',
       priority: 'high',
       status: 'preparing',
-      specialInstructions: 'Customer allergic to onions'
+      specialInstructions: 'Customer allergic to onions - URGENT',
+      orderNumber: 'ORD-2024-001',
+      orderType: 'takeout',
+      tableNumber: null
     },
     { 
       id: 'ORD-12355', 
