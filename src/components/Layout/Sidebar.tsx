@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, Book as MenuBook, Users, ClipboardList, Wallet, Settings, ChefHat, TrendingUp, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, Book as MenuBook, ClipboardList, Settings, Shield, LogOut, Tags } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
@@ -14,7 +14,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange }) => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'menu', label: 'Menu Management', icon: MenuBook },
-    { id: 'employees', label: 'Employees', icon: Users },
+    { id: 'categories', label: 'Categories', icon: Tags },
     { id: 'orders', label: 'Order History', icon: ClipboardList },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];

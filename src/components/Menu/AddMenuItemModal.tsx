@@ -1,57 +1,89 @@
-import React, { useState } from 'react';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Loader2 } from 'lucide-react';
+import { CreateMenuItemRequest, MenuCategory, ApiResponse } from '../../types/menu';
+import { api } from '../../utils/api';
 
 interface AddMenuItemModalProps {
   onClose: () => void;
+  onSubmit: (data: CreateMenuItemRequest) => void;
 }
 
-const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose }) => {
+const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
-    category: 'Main Course',
-    prepTime: '',
-    image: ''
+    category_id: '',
+    prep_time: '',
+    is_available: true,
+    is_featured: false,
+    calories: ''
   });
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  const [ingredients, setIngredients] = useState([
-    { name: '', amount: '', unit: 'g' }
-  ]);
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+        setCategoriesError(null);
+        
+        const response = await api.categories.getAll();
+        const result: ApiResponse<MenuCategory[]> = await response.json();
+        
+        if (result.success && result.data) {
+          setCategories(result.data.filter(category => category.is_active));
+        } else {
+          setCategoriesError(result.message || 'Failed to fetch categories');
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        setCategoriesError('Failed to fetch categories. Please try again.');
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
 
-  const categories = ['Main Course', 'Appetizer', 'Side Dish', 'Beverage', 'Dessert'];
-  const units = ['g', 'kg', 'ml', 'liters', 'pieces', 'cups'];
+    fetchCategories();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const menuItemData = {
-      ...formData,
-      ingredients: ingredients.filter(ing => ing.name && ing.amount)
-    };
-    console.log('Adding menu item:', menuItemData);
-    onClose();
+          const menuItemData: CreateMenuItemRequest = {
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        category_id: formData.category_id,
+        prep_time: parseInt(formData.prep_time),
+        is_available: formData.is_available,
+        is_featured: formData.is_featured,
+        calories: formData.calories ? parseInt(formData.calories) : undefined
+      };
+    
+    console.log('Submitting menu item data:', menuItemData);
+    onSubmit(menuItemData);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData({
+        ...formData,
+        [name]: checked
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
   };
 
-  const handleIngredientChange = (index: number, field: string, value: string) => {
-    const updatedIngredients = [...ingredients];
-    updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
-    setIngredients(updatedIngredients);
-  };
 
-  const addIngredient = () => {
-    setIngredients([...ingredients, { name: '', amount: '', unit: 'g' }]);
-  };
-
-  const removeIngredient = (index: number) => {
-    setIngredients(ingredients.filter((_, i) => i !== index));
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -86,16 +118,29 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Category
               </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
+              {isLoadingCategories ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <span className="text-sm text-gray-500">Loading categories...</span>
+                </div>
+              ) : categoriesError ? (
+                <div className="text-red-600 text-sm">{categoriesError}</div>
+              ) : (
+                <select
+                  name="category_id"
+                  value={formData.category_id}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Select a category</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
@@ -119,12 +164,51 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose }) => {
               </label>
               <input
                 type="number"
-                name="prepTime"
-                value={formData.prepTime}
+                name="prep_time"
+                value={formData.prep_time}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Calories (optional)
+              </label>
+              <input
+                type="number"
+                name="calories"
+                value={formData.calories}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., 350"
+              />
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="is_available"
+                  checked={formData.is_available}
+                  onChange={handleChange}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Available</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="is_featured"
+                  checked={formData.is_featured}
+                  onChange={handleChange}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Featured</span>
+              </label>
             </div>
           </div>
 
@@ -142,90 +226,7 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose }) => {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Image URL
-            </label>
-            <input
-              type="url"
-              name="image"
-              value={formData.image}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="https://example.com/image.jpg"
-            />
-          </div>
 
-          {/* Ingredients Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Required Ingredients</h3>
-              <button
-                type="button"
-                onClick={addIngredient}
-                className="bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 flex items-center space-x-1 text-sm"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Add Ingredient</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {ingredients.map((ingredient, index) => (
-                <div key={index} className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-5">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Ingredient Name
-                    </label>
-                    <input
-                      type="text"
-                      value={ingredient.name}
-                      onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., Chicken Breast"
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Amount
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={ingredient.amount}
-                      onChange={(e) => handleIngredientChange(index, 'amount', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Unit
-                    </label>
-                    <select
-                      value={ingredient.unit}
-                      onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {units.map(unit => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-1">
-                    {ingredients.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeIngredient(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button

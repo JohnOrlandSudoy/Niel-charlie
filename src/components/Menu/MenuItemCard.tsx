@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Edit, Trash2, Clock, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { Edit, Trash2, Clock, AlertCircle, Star } from 'lucide-react';
 
-interface MenuItem {
-  id: number;
+// Legacy interface for backward compatibility
+interface LegacyMenuItem {
+  id: string;
   name: string;
   description: string;
   price: number;
@@ -19,7 +20,8 @@ interface MenuItem {
 }
 
 interface MenuItemCardProps {
-  item: MenuItem;
+  item: LegacyMenuItem;
+  onDelete: (id: string) => void;
 }
 
 const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
@@ -29,7 +31,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow duration-200">
       <div className="relative">
         <img
-          src={item.image}
+          src={item.image || 'https://via.placeholder.com/300x200?text=No+Image'}
           alt={item.name}
           className="w-full h-48 object-cover"
         />
@@ -65,8 +67,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
             <span>{item.prepTime}m</span>
           </div>
           <div className="flex items-center space-x-1">
-            <TrendingUp className="h-4 w-4" />
-            <span>{item.popularity}%</span>
+            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+              {item.popularity}% popular
+            </span>
           </div>
         </div>
 
@@ -106,7 +109,10 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
             <Edit className="h-4 w-4" />
             <span>Edit</span>
           </button>
-          <button className="bg-red-600 text-white py-2 px-3 rounded-lg hover:bg-red-700 transition-colors duration-200">
+          <button 
+            onClick={() => onDelete(item.id)}
+            className="bg-red-600 text-white py-2 px-3 rounded-lg hover:bg-red-700 transition-colors duration-200"
+          >
             <Trash2 className="h-4 w-4" />
           </button>
         </div>

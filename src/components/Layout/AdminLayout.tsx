@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../Dashboard/Dashboard';
 import InventoryManagement from '../Inventory/InventoryManagement';
 import MenuManagement from '../Menu/MenuManagement';
-import EmployeeManagement from '../Employee/EmployeeManagement';
+import CategoryManagement from '../Menu/CategoryManagement';
 import OrderHistory from '../Orders/OrderHistory';
 import Settings from '../Settings/Settings';
 
 const AdminLayout: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [notifications] = useState([
-    { id: 1, type: 'warning', message: 'Low stock: Chicken (5 kg remaining)', time: '2 min ago' },
-    { id: 2, type: 'info', message: 'New order received: #ORD-12345', time: '5 min ago' },
-    { id: 3, type: 'error', message: 'Pepper out of stock - Chicken Pastil unavailable', time: '10 min ago' },
-  ]);
+  const [notifications] = useState<Array<{
+    id: number;
+    type: 'info' | 'warning' | 'error';
+    message: string;
+    time: string;
+  }>>([]);
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -25,8 +25,8 @@ const AdminLayout: React.FC = () => {
         return <InventoryManagement />;
       case 'menu':
         return <MenuManagement />;
-      case 'employees':
-        return <EmployeeManagement />;
+      case 'categories':
+        return <CategoryManagement />;
       case 'orders':
         return <OrderHistory />;
       case 'settings':
