@@ -1,32 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import MenuItemCard from './MenuItemCard';
 import AddMenuItemModal from './AddMenuItemModal';
+import EditMenuItemModal from './EditMenuItemModal';
+import ManageIngredientsModal from './ManageIngredientsModal';
 import { api } from '../../utils/api';
-import { MenuItem, MenuStats, ApiResponse, CreateMenuItemRequest, MenuCategory } from '../../types/menu';
+import { MenuItem, MenuStats, ApiResponse, CreateMenuItemRequest, MenuCategory, PaginatedResponse } from '../../types/menu';
+import { storageHelpers } from '../../lib/supabase';
 
-// Legacy interface for MenuItemCard compatibility
-interface LegacyMenuItem {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  image: string;
-  available: boolean;
-  ingredients: Array<{
-    name: string;
-    amount: number;
-    unit: string;
-  }>;
-  prepTime: number;
-  popularity: number;
-}
 
 const MenuManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [filterAvailable, setFilterAvailable] = useState<boolean | undefined>(undefined);
+  const [filterFeatured, setFilterFeatured] = useState<boolean | undefined>(undefined);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,35 +26,174 @@ const MenuManagement: React.FC = () => {
     unavailableItems: 0,
     averagePrice: 0
   });
+  const [managingIngredients, setManagingIngredients] = useState<MenuItem | null>(null);
+  const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [itemsPerPage] = useState(12); // Fixed items per page
 
-  // Transform API MenuItem to legacy format for MenuItemCard
-  const transformToLegacyFormat = (item: MenuItem): LegacyMenuItem => {
+  // Transform API MenuItem to card format for MenuItemCard
+  const transformToCardFormat = (item: MenuItem) => {
+    // Construct image URL from filename or use image_url if available
+    let imageUrl = '';
+    if (item.image_url) {
+      imageUrl = item.image_url;
+    } else if (item.image_filename) {
+      // For Supabase Storage, get the public URL
+      imageUrl = storageHelpers.getPublicUrl('menu-item-images', item.image_filename);
+    }
+
     return {
       id: item.id,
       name: item.name,
       description: item.description,
       price: item.price,
       category: getCategoryName(item.category_id), // Use actual category name
-      image: item.image_url || '',
+      image: imageUrl,
       available: item.is_available,
-      ingredients: [], // Empty for now since API doesn't include ingredients
       prepTime: item.prep_time,
-      popularity: 0 // Default value since API doesn't include popularity
+      popularity: item.popularity,
+      isFeatured: item.is_featured,
+      calories: item.calories,
+      allergens: item.allergens || [],
+      ingredients: item.ingredients || []
     };
   };
 
-  // Fetch menu items from API
-  const fetchMenuItems = async () => {
+  // Handle ingredient management
+  const handleManageIngredients = (item: any) => {
+    // Find the full menu item data
+    const fullMenuItem = menuItems.find(menuItem => menuItem.id === item.id);
+    if (fullMenuItem) {
+      setManagingIngredients(fullMenuItem);
+    }
+  };
+
+  // Handle edit menu item
+  const handleEditMenuItem = (item: any) => {
+    // Find the full menu item data
+    const fullMenuItem = menuItems.find(menuItem => menuItem.id === item.id);
+    if (fullMenuItem) {
+      setEditingMenuItem(fullMenuItem);
+    }
+  };
+
+  // Handle ingredients updated
+  const handleIngredientsUpdated = async () => {
+    if (managingIngredients) {
+      try {
+        // Fetch updated ingredients for the specific menu item
+        const ingredientsResponse = await api.inventory.getMenuItemIngredients(managingIngredients.id);
+        const ingredientsResult = await ingredientsResponse.json();
+        
+        if (ingredientsResult.success && ingredientsResult.data) {
+          // Update the specific menu item with new ingredients
+          setMenuItems(prev => 
+            prev.map(item => 
+              item.id === managingIngredients.id 
+                ? { ...item, ingredients: ingredientsResult.data }
+                : item
+            )
+          );
+          console.log('Updated ingredients for menu item:', managingIngredients.id, ingredientsResult.data);
+        }
+      } catch (err) {
+        console.error('Error updating ingredients:', err);
+        // Fallback to full refresh if specific update fails
+        fetchMenuItems();
+      }
+    }
+  };
+
+  // Handle menu item updated
+  const handleMenuItemUpdated = (updatedItem: MenuItem) => {
+    // Update the specific menu item in the list
+    setMenuItems(prev => 
+      prev.map(item => 
+        item.id === updatedItem.id ? updatedItem : item
+      )
+    );
+    console.log('Updated menu item:', updatedItem);
+  };
+
+  // Fetch menu items from API with server-side filtering and pagination
+  const fetchMenuItems = async (page: number = currentPage, resetPage: boolean = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await api.menus.getAll();
-      const result: ApiResponse<MenuItem[]> = await response.json();
+      // Build query parameters
+      const queryParams: any = {
+        page: resetPage ? 1 : page,
+        limit: itemsPerPage
+      };
+      
+      // Add filters
+      if (filterCategory !== 'all') {
+        queryParams.category = filterCategory;
+      }
+      if (filterAvailable !== undefined) {
+        queryParams.available = filterAvailable;
+      }
+      if (filterFeatured !== undefined) {
+        queryParams.featured = filterFeatured;
+      }
+      if (searchQuery.trim()) {
+        queryParams.search = searchQuery.trim();
+      }
+      
+      console.log('Fetching menu items with params:', queryParams);
+      
+      const response = await api.menus.getAll(queryParams);
+      const result: PaginatedResponse<MenuItem> = await response.json();
       
       if (result.success && result.data) {
-        setMenuItems(result.data);
-        calculateStats(result.data);
+        // Fetch ingredients for each menu item
+        const menuItemsWithIngredients = await Promise.all(
+          result.data.map(async (menuItem) => {
+            try {
+              const ingredientsResponse = await api.inventory.getMenuItemIngredients(menuItem.id);
+              const ingredientsResult = await ingredientsResponse.json();
+              
+              if (ingredientsResult.success && ingredientsResult.data) {
+                return {
+                  ...menuItem,
+                  ingredients: ingredientsResult.data
+                };
+              } else {
+                console.warn(`Failed to fetch ingredients for menu item ${menuItem.id}:`, ingredientsResult.message);
+                return {
+                  ...menuItem,
+                  ingredients: []
+                };
+              }
+            } catch (err) {
+              console.warn(`Error fetching ingredients for menu item ${menuItem.id}:`, err);
+              return {
+                ...menuItem,
+                ingredients: []
+              };
+            }
+          })
+        );
+        
+        setMenuItems(menuItemsWithIngredients);
+        
+        // Update pagination state
+        setCurrentPage(result.pagination.page);
+        setTotalPages(result.pagination.totalPages);
+        setTotalItems(result.pagination.total);
+        
+        // Calculate stats from current page data (for display purposes)
+        // Note: For accurate stats, we'd need a separate stats endpoint
+        console.log('Calculating stats for current page items:', menuItemsWithIngredients.length);
+        calculateStats(menuItemsWithIngredients);
+        
+        console.log('Menu items with ingredients:', menuItemsWithIngredients);
+        console.log('Pagination info:', result.pagination);
       } else {
         setError(result.message || 'Failed to fetch menu items');
       }
@@ -103,9 +230,14 @@ const MenuManagement: React.FC = () => {
     const totalItems = items.length;
     const availableItems = items.filter(item => item.is_available).length;
     const unavailableItems = totalItems - availableItems;
-    const averagePrice = totalItems > 0 
-      ? Math.round(items.reduce((sum, item) => sum + item.price, 0) / totalItems)
-      : 0;
+    
+    // Calculate average price with debugging
+    const totalPrice = items.reduce((sum, item) => sum + item.price, 0);
+    const averagePrice = totalItems > 0 ? Math.round(totalPrice / totalItems) : 0;
+    
+    // Debug logging
+    console.log('Calculating stats for items:', items.map(item => ({ name: item.name, price: item.price })));
+    console.log('Total price:', totalPrice, 'Total items:', totalItems, 'Average:', averagePrice);
     
     setStats({
       totalItems,
@@ -119,13 +251,19 @@ const MenuManagement: React.FC = () => {
   const handleAddMenuItem = async (newItem: CreateMenuItemRequest) => {
     try {
       console.log('Creating menu item with data:', newItem);
-      const response = await api.menus.create(newItem);
+      
+      // Extract image file from the request
+      const { image, ...menuData } = newItem;
+      
+      const response = await api.menus.create(menuData, image);
       const result: ApiResponse<MenuItem> = await response.json();
       
       if (result.success && result.data) {
-        setMenuItems(prev => [...prev, result.data]);
-        calculateStats([...menuItems, result.data]);
+        // Refresh the current page to show the new item
+        // This ensures proper pagination and filtering
+        fetchMenuItems(currentPage, false);
         setShowAddModal(false);
+        console.log('Menu item created successfully:', result.data);
       } else {
         setError(result.message || 'Failed to add menu item');
       }
@@ -135,20 +273,37 @@ const MenuManagement: React.FC = () => {
     }
   };
 
-  // Handle deleting menu item
+  // Handle deleting menu item (soft delete)
   const handleDeleteMenuItem = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this menu item?')) {
+    if (!window.confirm('Are you sure you want to delete this menu item? This will make it unavailable but preserve the data.')) {
       return;
     }
     
     try {
+      console.log('Deleting menu item:', id);
+      
       const response = await api.menus.delete(id);
       const result: ApiResponse<null> = await response.json();
       
+      console.log('Delete response:', result);
+      
       if (result.success) {
+        // Remove the item from the current page list
         const updatedItems = menuItems.filter(item => item.id !== id);
         setMenuItems(updatedItems);
+        
+        // Update total count
+        setTotalItems(prev => prev - 1);
+        
+        // Recalculate stats for current page
         calculateStats(updatedItems);
+        
+        // If we're on a page that's now empty and not the first page, go to previous page
+        if (updatedItems.length === 0 && currentPage > 1) {
+          setCurrentPage(prev => prev - 1);
+        }
+        
+        console.log('Menu item deleted successfully');
       } else {
         setError(result.message || 'Failed to delete menu item');
       }
@@ -158,24 +313,63 @@ const MenuManagement: React.FC = () => {
     }
   };
 
+  // Handle search with debouncing
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    // Reset to page 1 when searching
+    setCurrentPage(1);
+  };
+
+  // Handle filter changes
+  const handleFilterChange = (filterType: string, value: any) => {
+    switch (filterType) {
+      case 'category':
+        setFilterCategory(value);
+        break;
+      case 'available':
+        setFilterAvailable(value === 'all' ? undefined : value === 'true');
+        break;
+      case 'featured':
+        setFilterFeatured(value === 'all' ? undefined : value === 'true');
+        break;
+    }
+    // Reset to page 1 when filtering
+    setCurrentPage(1);
+  };
+
+  // Handle pagination
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   // Load menu items and categories on component mount
   useEffect(() => {
-    fetchMenuItems();
+    fetchMenuItems(1, true); // Start with page 1
     fetchCategories();
   }, []);
 
-  const filteredItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Filter by category
-    const matchesCategory = filterCategory === 'all' || item.category_id === filterCategory;
-    
-    return matchesSearch && matchesCategory;
-  });
+  // Refetch when filters or search change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchMenuItems(1, true); // Reset to page 1 when filters change
+    }, 300); // Debounce search by 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, filterCategory, filterAvailable, filterFeatured]);
+
+  // Refetch when page changes
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchMenuItems(currentPage, false);
+    }
+  }, [currentPage]);
+
+  // No need for client-side filtering since we're using server-side filtering
+  const filteredItems = menuItems;
 
   // Get category name by ID
-  const getCategoryName = (categoryId: string) => {
+  const getCategoryName = (categoryId: string | null) => {
+    if (!categoryId) return 'No Category';
     const category = categories.find(cat => cat.id === categoryId);
     return category ? category.name : 'Unknown Category';
   };
@@ -214,19 +408,23 @@ const MenuManagement: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm font-medium text-gray-600">Total Items</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalItems}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{totalItems}</p>
+          <p className="text-xs text-gray-500 mt-1">Across all pages</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <p className="text-sm font-medium text-gray-600">Current Page</p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">{menuItems.length}</p>
+          <p className="text-xs text-gray-500 mt-1">Items on this page</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm font-medium text-gray-600">Available</p>
           <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.availableItems}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600">Unavailable</p>
-          <p className="text-2xl font-bold text-red-600 mt-1">{stats.unavailableItems}</p>
+          <p className="text-xs text-gray-500 mt-1">On current page</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm font-medium text-gray-600">Avg. Price</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">₱{stats.averagePrice}</p>
+          <p className="text-xs text-gray-500 mt-1">Current page ({menuItems.length} items)</p>
         </div>
       </div>
 
@@ -240,7 +438,7 @@ const MenuManagement: React.FC = () => {
                 type="text"
                 placeholder="Search menu items..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -250,7 +448,7 @@ const MenuManagement: React.FC = () => {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
+              onChange={(e) => handleFilterChange('category', e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               disabled={isLoadingCategories}
             >
@@ -261,6 +459,27 @@ const MenuManagement: React.FC = () => {
                 </option>
               ))}
             </select>
+            
+            <select
+              value={filterAvailable === undefined ? 'all' : filterAvailable.toString()}
+              onChange={(e) => handleFilterChange('available', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Availability</option>
+              <option value="true">Available Only</option>
+              <option value="false">Unavailable Only</option>
+            </select>
+            
+            <select
+              value={filterFeatured === undefined ? 'all' : filterFeatured.toString()}
+              onChange={(e) => handleFilterChange('featured', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Items</option>
+              <option value="true">Featured Only</option>
+              <option value="false">Non-Featured Only</option>
+            </select>
+            
             {isLoadingCategories && (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             )}
@@ -281,8 +500,10 @@ const MenuManagement: React.FC = () => {
             filteredItems.map(item => (
               <MenuItemCard 
                 key={item.id} 
-                item={transformToLegacyFormat(item)} 
+                item={transformToCardFormat(item)} 
                 onDelete={handleDeleteMenuItem}
+                onEdit={handleEditMenuItem}
+                onManageIngredients={handleManageIngredients}
               />
             ))
           ) : (
@@ -294,10 +515,86 @@ const MenuManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="text-sm text-gray-700">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} items
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Previous</span>
+            </button>
+            
+            {/* Page Numbers */}
+            <div className="flex space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+            >
+              <span>Next</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAddModal && (
         <AddMenuItemModal 
           onClose={() => setShowAddModal(false)} 
           onSubmit={handleAddMenuItem}
+        />
+      )}
+
+      {managingIngredients && (
+        <ManageIngredientsModal
+          menuItem={managingIngredients}
+          onClose={() => setManagingIngredients(null)}
+          onIngredientsUpdated={handleIngredientsUpdated}
+        />
+      )}
+
+      {editingMenuItem && (
+        <EditMenuItemModal
+          menuItem={editingMenuItem}
+          categories={categories}
+          onClose={() => setEditingMenuItem(null)}
+          onMenuItemUpdated={handleMenuItemUpdated}
         />
       )}
     </div>

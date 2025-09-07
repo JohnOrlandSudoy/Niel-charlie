@@ -1,18 +1,99 @@
-import React, { useState } from 'react';
-import { Search, Plus, AlertTriangle, Package, Filter } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, AlertTriangle, Package, Filter, Loader2 } from 'lucide-react';
 import InventoryTable from './InventoryTable';
 import AddIngredientModal from './AddIngredientModal';
+import { api } from '../../utils/api';
+import { Ingredient, InventoryStats, ApiResponse } from '../../types/inventory';
 
 const InventoryManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [stats, setStats] = useState<InventoryStats>({
+    totalItems: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
+    wellStockedItems: 0,
+    totalValue: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch ingredients and calculate statistics
+  const fetchIngredients = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await api.inventory.getAllIngredients();
+      const result: ApiResponse<Ingredient[]> = await response.json();
+      
+      if (result.success && result.data) {
+        setIngredients(result.data);
+        calculateStats(result.data);
+      } else {
+        setError(result.message || 'Failed to fetch ingredients');
+      }
+    } catch (err) {
+      console.error('Error fetching ingredients:', err);
+      setError('Failed to fetch ingredients. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Calculate statistics from ingredients
+  const calculateStats = (ingredients: Ingredient[]) => {
+    const totalItems = ingredients.length;
+    let lowStockItems = 0;
+    let outOfStockItems = 0;
+    let totalValue = 0;
+
+    ingredients.forEach(ingredient => {
+      if (ingredient.current_stock === 0) {
+        outOfStockItems++;
+      } else if (ingredient.min_stock_threshold && ingredient.current_stock <= ingredient.min_stock_threshold) {
+        lowStockItems++;
+      }
+      
+      if (ingredient.cost_per_unit) {
+        totalValue += ingredient.current_stock * ingredient.cost_per_unit;
+      }
+    });
+
+    const wellStockedItems = totalItems - lowStockItems - outOfStockItems;
+
+    setStats({
+      totalItems,
+      lowStockItems,
+      outOfStockItems,
+      wellStockedItems,
+      totalValue
+    });
+  };
+
+  // Load ingredients on component mount
+  useEffect(() => {
+    fetchIngredients();
+  }, []);
+
+  // Handle ingredient added
+  const handleIngredientAdded = (newIngredient: Ingredient) => {
+    setIngredients(prev => [...prev, newIngredient]);
+    calculateStats([...ingredients, newIngredient]);
+  };
+
+  // Handle ingredient update (for table refresh)
+  const handleIngredientUpdate = () => {
+    fetchIngredients();
+  };
 
   const inventoryStats = [
-    { label: 'Total Items', value: 42, icon: Package, color: 'blue' },
-    { label: 'Low Stock', value: 5, icon: AlertTriangle, color: 'amber' },
-    { label: 'Out of Stock', value: 2, icon: AlertTriangle, color: 'red' },
-    { label: 'Well Stocked', value: 35, icon: Package, color: 'emerald' }
+    { label: 'Total Items', value: stats.totalItems, icon: Package, color: 'blue' },
+    { label: 'Low Stock', value: stats.lowStockItems, icon: AlertTriangle, color: 'amber' },
+    { label: 'Out of Stock', value: stats.outOfStockItems, icon: AlertTriangle, color: 'red' },
+    { label: 'Well Stocked', value: stats.wellStockedItems, icon: Package, color: 'emerald' }
   ];
 
   return (
@@ -82,11 +163,18 @@ const InventoryManagement: React.FC = () => {
           </div>
         </div>
 
-        <InventoryTable searchQuery={searchQuery} filterStatus={filterStatus} />
+        <InventoryTable 
+          searchQuery={searchQuery} 
+          filterStatus={filterStatus} 
+          onIngredientUpdate={handleIngredientUpdate}
+        />
       </div>
 
       {showAddModal && (
-        <AddIngredientModal onClose={() => setShowAddModal(false)} />
+        <AddIngredientModal 
+          onClose={() => setShowAddModal(false)} 
+          onIngredientAdded={handleIngredientAdded}
+        />
       )}
     </div>
   );

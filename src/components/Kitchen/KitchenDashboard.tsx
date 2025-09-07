@@ -14,8 +14,19 @@ import {
   X,
   Plus,
   Minus,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  History
 } from 'lucide-react';
+import { api } from '../../utils/api';
+import { 
+  KitchenOrder, 
+  KitchenOrderItem, 
+  OrderStatusUpdate, 
+  OrderStatusHistory, 
+  KitchenStats, 
+  ApiResponse 
+} from '../../types/kitchen';
 
 interface OrderItem {
   name: string;
@@ -106,21 +117,125 @@ const getStockStatusColor = (status: string) => {
 const KitchenDashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('orders');
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [showStockAlert, setShowStockAlert] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<KitchenOrder | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [kitchenStats, setKitchenStats] = useState<KitchenStats>({
+    totalOrders: 0,
+    pendingOrders: 0,
+    preparingOrders: 0,
+    readyOrders: 0,
+    completedOrders: 0,
+    averagePrepTime: 0,
+    totalRevenue: 0
+  });
+  const [orderHistory, setOrderHistory] = useState<OrderStatusHistory[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [notifications, setNotifications] = useState<string[]>([]);
 
-  // Mock data for kitchen dashboard
+  // Fetch kitchen orders from API
+  const fetchKitchenOrders = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await api.orders.getKitchenOrders();
+      const result: ApiResponse<KitchenOrder[]> = await response.json();
+      
+      if (result.success && result.data) {
+        console.log('Kitchen orders fetched:', result.data);
+        console.log('First order structure:', result.data[0]);
+        setOrders(result.data);
+        calculateKitchenStats(result.data);
+      } else {
+        console.error('Failed to fetch kitchen orders:', result);
+        setError(result.message || 'Failed to fetch kitchen orders');
+      }
+    } catch (err) {
+      console.error('Error fetching kitchen orders:', err);
+      setError('Failed to fetch kitchen orders. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Calculate kitchen statistics
+  const calculateKitchenStats = (ordersData: KitchenOrder[]) => {
+    const stats: KitchenStats = {
+      totalOrders: ordersData?.length || 0,
+      pendingOrders: ordersData?.filter(order => order.status === 'pending').length || 0,
+      preparingOrders: ordersData?.filter(order => order.status === 'preparing').length || 0,
+      readyOrders: ordersData?.filter(order => order.status === 'ready').length || 0,
+      completedOrders: ordersData?.filter(order => order.status === 'completed').length || 0,
+      averagePrepTime: 0, // This would need to be calculated from actual prep times
+      totalRevenue: ordersData?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0
+    };
+    setKitchenStats(stats);
+  };
+
+  // Stats cards using real data
   const stats = [
-    { label: 'Orders in Queue', value: '8', icon: Clock, color: 'amber' },
-    { label: 'Currently Preparing', value: '5', icon: ChefHat, color: 'blue' },
-    { label: 'Ready for Pickup', value: '3', icon: CheckCircle, color: 'emerald' },
-    { label: 'Completed Today', value: '42', icon: Timer, color: 'purple' }
+    { label: 'Orders in Queue', value: kitchenStats.pendingOrders.toString(), icon: Clock, color: 'amber' },
+    { label: 'Currently Preparing', value: kitchenStats.preparingOrders.toString(), icon: ChefHat, color: 'blue' },
+    { label: 'Ready for Pickup', value: kitchenStats.readyOrders.toString(), icon: CheckCircle, color: 'emerald' },
+    { label: 'Completed Today', value: kitchenStats.completedOrders.toString(), icon: Timer, color: 'purple' }
   ];
 
-  // Enhanced mock orders with real-time data
+  // Fetch real inventory data for stock awareness
+  const fetchInventoryData = async () => {
+    try {
+      const response = await api.inventory.getAllIngredients();
+      const result: ApiResponse<any[]> = await response.json();
+      
+      if (result.success && result.data) {
+        // Convert API data to our ingredient format
+        const inventoryIngredients: Ingredient[] = result.data.map(item => ({
+          name: item.name,
+          currentStock: item.current_stock || 0,
+          minStock: item.min_stock_threshold || 0,
+          unit: item.unit || 'kg',
+          status: item.current_stock === 0 ? 'out' : 
+                  (item.min_stock_threshold && item.current_stock <= item.min_stock_threshold) ? 'low' : 'sufficient'
+        }));
+        setIngredients(inventoryIngredients);
+        
+        // Check for critical stock alerts
+        const criticalIngredients = inventoryIngredients.filter(ing => ing.status === 'out');
+        if (criticalIngredients.length > 0) {
+          setShowStockAlert(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching inventory data:', err);
+      // Fallback to mock data if API fails
+      const mockIngredients: Ingredient[] = [
+        { name: 'chicken', currentStock: 15, minStock: 10, unit: 'kg', status: 'sufficient' },
+        { name: 'pork', currentStock: 8, minStock: 10, unit: 'kg', status: 'low' },
+        { name: 'beef', currentStock: 12, minStock: 10, unit: 'kg', status: 'sufficient' },
+        { name: 'rice', currentStock: 25, minStock: 15, unit: 'kg', status: 'sufficient' },
+        { name: 'soy sauce', currentStock: 3, minStock: 5, unit: 'L', status: 'low' },
+        { name: 'pepper', currentStock: 0, minStock: 2, unit: 'kg', status: 'out' },
+        { name: 'garlic', currentStock: 2, minStock: 3, unit: 'kg', status: 'low' },
+        { name: 'vinegar', currentStock: 4, minStock: 3, unit: 'L', status: 'sufficient' },
+        { name: 'oil', currentStock: 6, minStock: 5, unit: 'L', status: 'sufficient' },
+        { name: 'tea leaves', currentStock: 1, minStock: 2, unit: 'kg', status: 'low' },
+        { name: 'sugar', currentStock: 8, minStock: 5, unit: 'kg', status: 'sufficient' }
+      ];
+      setIngredients(mockIngredients);
+      
+      const criticalIngredients = mockIngredients.filter(ing => ing.status === 'out');
+      if (criticalIngredients.length > 0) {
+        setShowStockAlert(true);
+      }
+    }
+  };
+
+  // Remove mock orders - using API data instead
   const mockOrders: Order[] = [
     { 
       id: 'ORD-12354', 
@@ -205,82 +320,181 @@ const KitchenDashboard: React.FC = () => {
     }
   ];
 
-  // Mock ingredients with stock levels
-  const mockIngredients: Ingredient[] = [
-    { name: 'chicken', currentStock: 15, minStock: 10, unit: 'kg', status: 'sufficient' },
-    { name: 'pork', currentStock: 8, minStock: 10, unit: 'kg', status: 'low' },
-    { name: 'beef', currentStock: 12, minStock: 10, unit: 'kg', status: 'sufficient' },
-    { name: 'rice', currentStock: 25, minStock: 15, unit: 'kg', status: 'sufficient' },
-    { name: 'soy sauce', currentStock: 3, minStock: 5, unit: 'L', status: 'low' },
-    { name: 'pepper', currentStock: 0, minStock: 2, unit: 'kg', status: 'out' },
-    { name: 'garlic', currentStock: 2, minStock: 3, unit: 'kg', status: 'low' },
-    { name: 'vinegar', currentStock: 4, minStock: 3, unit: 'L', status: 'sufficient' },
-    { name: 'oil', currentStock: 6, minStock: 5, unit: 'L', status: 'sufficient' },
-    { name: 'tea leaves', currentStock: 1, minStock: 2, unit: 'kg', status: 'low' },
-    { name: 'sugar', currentStock: 8, minStock: 5, unit: 'kg', status: 'sufficient' }
-  ];
-
   useEffect(() => {
-    setOrders(mockOrders);
-    setIngredients(mockIngredients);
+    fetchKitchenOrders();
+    fetchInventoryData();
     
-    // Check for critical stock alerts
-    const criticalIngredients = mockIngredients.filter(ing => ing.status === 'out');
-    if (criticalIngredients.length > 0) {
-      setShowStockAlert(true);
-    }
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      fetchKitchenOrders();
+      fetchInventoryData();
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const updateOrderStatus = (orderId: string, itemIndex: number, newStatus: 'pending' | 'preparing' | 'ready') => {
-    setOrders(prevOrders => 
-      prevOrders.map(order => {
-        if (order.id === orderId) {
-          const updatedItems = [...order.items];
-          updatedItems[itemIndex] = { ...updatedItems[itemIndex], status: newStatus };
-          
-          // Update overall order status
-          let orderStatus: 'pending' | 'preparing' | 'ready' | 'completed' = 'pending';
-          if (updatedItems.every(item => item.status === 'ready')) {
-            orderStatus = 'ready';
-          } else if (updatedItems.some(item => item.status === 'preparing')) {
-            orderStatus = 'preparing';
-          }
-          
-          return { ...order, items: updatedItems, status: orderStatus };
+  // Add notification
+  const addNotification = (message: string) => {
+    setNotifications(prev => [...prev, message]);
+    // Auto-remove notification after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.slice(1));
+    }, 5000);
+  };
+
+  // Update order status via API
+  const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => {
+    try {
+      setError(null);
+      console.log('🔄 Updating order status:', { orderId, newStatus, notes });
+      console.log('🌐 API URL will be:', `http://localhost:3000/api/orders/${orderId}/status`);
+      console.log('📤 Request body will be:', JSON.stringify({ status: newStatus, notes }));
+      
+      const response = await api.orders.updateOrderStatus(orderId, { status: newStatus, notes });
+      console.log('📡 API Response status:', response.status);
+      console.log('📡 API Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // Check if response is ok before trying to parse JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', errorText);
+        setError(`API Error (${response.status}): ${errorText}`);
+        return;
+      }
+      
+      const result: ApiResponse<KitchenOrder> = await response.json();
+      console.log('📋 API Result:', result);
+      
+      if (result.success && result.data) {
+        console.log('✅ Status update successful, updating local state...');
+        
+        // Update the order in local state
+        setOrders(prevOrders => {
+          const updatedOrders = prevOrders.map(order => 
+            order.id === orderId ? result.data! : order
+          );
+          console.log('🔄 Updated orders:', updatedOrders);
+          return updatedOrders;
+        });
+        
+        // Update selected order if it's the same
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder(result.data!);
+          console.log('🔄 Updated selected order:', result.data);
         }
-        return order;
-      })
-    );
+        
+        // Add notification for status changes
+        if (newStatus === 'ready') {
+          addNotification(`Order #${result.data.order_number} is ready for pickup!`);
+        } else if (newStatus === 'preparing') {
+          addNotification(`Started preparing Order #${result.data.order_number}`);
+        } else if (newStatus === 'completed') {
+          addNotification(`Order #${result.data.order_number} completed successfully`);
+        }
+        
+        console.log('✅ Order status updated successfully:', result.data);
+      } else {
+        console.error('❌ API returned error:', result);
+        setError(result.message || 'Failed to update order status');
+      }
+    } catch (err) {
+      console.error('❌ Error updating order status:', err);
+      setError('Failed to update order status. Please try again.');
+    }
   };
 
-  const markOrderComplete = (orderId: string) => {
-    setOrders(prevOrders => 
-      prevOrders.map(order => 
-        order.id === orderId 
-          ? { ...order, status: 'completed' as const }
-          : order
-      )
-    );
+
+  const markOrderComplete = async (orderId: string) => {
+    await updateOrderStatus(orderId, 'completed', 'Order completed by kitchen staff');
   };
 
-  const canPrepareItem = (item: OrderItem): boolean => {
-    return item.ingredients.every(ingredientName => {
+  const canPrepareItem = (item: KitchenOrderItem): boolean => {
+    // Check if we have ingredient requirements for this menu item
+    // For now, we'll do a basic check based on common ingredients
+    // This would be enhanced when the API includes ingredient requirements
+    
+    if (!item.menu_item?.name) return false;
+    
+    const itemName = item.menu_item.name.toLowerCase();
+    
+    // Basic ingredient mapping for common dishes
+    const ingredientMap: { [key: string]: string[] } = {
+      'chicken pastil': ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'],
+      'pork adobo': ['pork', 'rice', 'garlic', 'soy sauce', 'vinegar'],
+      'beef tapa': ['beef', 'rice', 'garlic', 'soy sauce', 'vinegar'],
+      'iced tea': ['tea leaves', 'sugar', 'ice'],
+      'calamansi juice': ['calamansi', 'sugar', 'water', 'ice']
+    };
+    
+    // Find matching ingredients for this item
+    const requiredIngredients = ingredientMap[itemName] || [];
+    
+    // Check if all required ingredients are available
+    return requiredIngredients.every(ingredientName => {
       const ingredient = ingredients.find(ing => ing.name === ingredientName);
       return ingredient && ingredient.status !== 'out';
     });
   };
 
   const getFilteredOrders = (status: string) => {
-    return orders.filter(order => order.status === status);
+    return orders?.filter(order => order.status === status) || [];
   };
 
-  const openOrderModal = (order: Order) => {
+  const openOrderModal = (order: KitchenOrder) => {
     setSelectedOrder(order);
     setShowOrderModal(true);
   };
 
+  // Fetch order status history
+  const fetchOrderHistory = async (orderId: string) => {
+    try {
+      setIsLoadingHistory(true);
+      setError(null);
+      
+      const response = await api.orders.getOrderStatusHistory(orderId);
+      const result: ApiResponse<OrderStatusHistory[]> = await response.json();
+      
+      if (result.success && result.data) {
+        setOrderHistory(result.data);
+        setShowHistoryModal(true);
+        console.log('Order history fetched:', result.data);
+      } else {
+        setError(result.message || 'Failed to fetch order history');
+      }
+    } catch (err) {
+      console.error('Error fetching order history:', err);
+      setError('Failed to fetch order history. Please try again.');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Notifications */}
+      {notifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {notifications.map((notification, index) => (
+            <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+              <div className="flex items-center space-x-2">
+                <Bell className="h-5 w-5 text-green-600" />
+                <span className="text-green-800">{notification}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <span className="text-red-800">{error}</span>
+          </div>
+        </div>
+      )}
+
       {/* Stock Alert Banner */}
       {showStockAlert && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -290,7 +504,11 @@ const KitchenDashboard: React.FC = () => {
               <div>
                 <h3 className="text-sm font-medium text-red-800">Critical Stock Alert</h3>
                 <p className="text-sm text-red-600">
-                  Some ingredients are out of stock and may affect order fulfillment
+                  {ingredients.filter(ing => ing.status === 'out').length} ingredient(s) out of stock: {' '}
+                  {ingredients.filter(ing => ing.status === 'out').map(ing => ing.name).join(', ')}
+                </p>
+                <p className="text-xs text-red-500 mt-1">
+                  Orders requiring these ingredients cannot be prepared
                 </p>
               </div>
             </div>
@@ -312,9 +530,26 @@ const KitchenDashboard: React.FC = () => {
             Welcome back, {user?.firstName}! Manage food preparation and orders here.
           </p>
         </div>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => {
+              fetchKitchenOrders();
+              fetchInventoryData();
+            }}
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Clock className="h-4 w-4" />
+            )}
+            <span>Refresh</span>
+          </button>
         <div className="text-right">
           <p className="text-sm text-gray-500">Kitchen Status</p>
           <p className="text-sm font-medium text-emerald-600">All Systems Operational</p>
+          </div>
         </div>
       </div>
 
@@ -369,6 +604,13 @@ const KitchenDashboard: React.FC = () => {
         <div className="p-6">
           {activeTab === 'orders' && (
             <div className="space-y-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Loading kitchen orders...</span>
+                </div>
+              ) : (
+                <>
               {/* Order Status Sections */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Pending Orders */}
@@ -434,6 +676,8 @@ const KitchenDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+                </>
+              )}
             </div>
           )}
 
@@ -496,35 +740,120 @@ const KitchenDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <button className="p-4 border-2 border-dashed border-blue-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg transition-all duration-200 text-center">
-            <ChefHat className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="font-medium text-gray-900">Start Preparation</p>
-            <p className="text-sm text-gray-500">Begin cooking order</p>
-          </button>
-          
-          <button className="p-4 border-2 border-dashed border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-lg transition-all duration-200 text-center">
-            <CheckCircle className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-            <p className="font-medium text-gray-900">Mark Ready</p>
-            <p className="text-sm text-gray-500">Order ready for pickup</p>
-          </button>
-          
-          <button className="p-4 border-2 border-dashed border-amber-200 hover:border-amber-300 hover:bg-amber-50 rounded-lg transition-all duration-200 text-center">
-            <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-2" />
-            <p className="font-medium text-gray-900">Report Issue</p>
-            <p className="text-sm text-gray-500">Equipment or ingredient problem</p>
-          </button>
+       {/* Quick Actions */}
+       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <button className="p-4 border-2 border-dashed border-blue-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg transition-all duration-200 text-center">
+             <ChefHat className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+             <p className="font-medium text-gray-900">Start Preparation</p>
+             <p className="text-sm text-gray-500">Begin cooking order</p>
+           </button>
+           
+           <button className="p-4 border-2 border-dashed border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-lg transition-all duration-200 text-center">
+             <CheckCircle className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+             <p className="font-medium text-gray-900">Mark Ready</p>
+             <p className="text-sm text-gray-500">Order ready for pickup</p>
+           </button>
+           
+           <button className="p-4 border-2 border-dashed border-amber-200 hover:border-amber-300 hover:bg-amber-50 rounded-lg transition-all duration-200 text-center">
+             <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+             <p className="font-medium text-gray-900">Report Issue</p>
+             <p className="text-sm text-gray-500">Equipment or ingredient problem</p>
+           </button>
 
-          <button className="p-4 border-2 border-dashed border-purple-200 hover:border-purple-300 hover:bg-purple-50 rounded-lg transition-all duration-200 text-center">
-            <Bell className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-            <p className="font-medium text-gray-900">Notify Cashier</p>
-            <p className="text-sm text-gray-500">Order ready notification</p>
-          </button>
-        </div>
-      </div>
+           <button className="p-4 border-2 border-dashed border-purple-200 hover:border-purple-300 hover:bg-purple-50 rounded-lg transition-all duration-200 text-center">
+             <Bell className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+             <p className="font-medium text-gray-900">Notify Cashier</p>
+             <p className="text-sm text-gray-500">Order ready notification</p>
+           </button>
+         </div>
+         
+         {/* API Test Section */}
+         <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+           <h4 className="text-sm font-medium text-gray-900 mb-3">🔧 API Test (Debug Mode)</h4>
+           <div className="flex flex-wrap gap-2">
+             <button
+               onClick={() => {
+                 if (orders.length > 0) {
+                   const testOrder = orders[0];
+                   console.log('🧪 Testing API with order:', testOrder);
+                   updateOrderStatus(testOrder.id, 'preparing', 'Test API call from debug button');
+                 } else {
+                   console.log('❌ No orders available for testing');
+                   setError('No orders available for testing');
+                 }
+               }}
+               className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 border border-blue-300 rounded hover:bg-blue-200"
+             >
+               Test Status Update
+             </button>
+             <button
+               onClick={async () => {
+                 try {
+                   console.log('🔐 Testing authentication...');
+                   const response = await api.orders.getKitchenOrders();
+                   console.log('✅ Auth test successful:', response.status);
+                 } catch (error) {
+                   console.error('❌ Auth test failed:', error);
+                 }
+               }}
+               className="px-3 py-1 text-xs font-medium text-green-600 bg-green-100 border border-green-300 rounded hover:bg-green-200"
+             >
+               Test Auth
+             </button>
+             <button
+               onClick={async () => {
+                 try {
+                   const orderId = '2e2d79c8-9505-4808-837c-3f08a366d5fd';
+                   console.log('🧪 Testing direct API call...');
+                   
+                   const token = localStorage.getItem('authToken');
+                   console.log('🔑 Using token:', token);
+                   
+                   const response = await fetch(`http://localhost:3000/api/orders/${orderId}/status`, {
+                     method: 'PUT',
+                     headers: {
+                       'Content-Type': 'application/json',
+                       'Authorization': `Bearer ${token}`
+                     },
+                     body: JSON.stringify({
+                       status: 'ready',
+                       notes: 'Direct API test'
+                     })
+                   });
+                   
+                   console.log('📡 Direct API Response status:', response.status);
+                   const result = await response.text();
+                   console.log('📋 Direct API Response body:', result);
+                   
+                 } catch (error) {
+                   console.error('❌ Direct API test failed:', error);
+                 }
+               }}
+               className="px-3 py-1 text-xs font-medium text-purple-600 bg-purple-100 border border-purple-300 rounded hover:bg-purple-200"
+             >
+               Test Direct API
+             </button>
+             <button
+               onClick={() => {
+                 console.log('🔍 Current orders:', orders);
+                 console.log('🔍 Current auth token:', localStorage.getItem('authToken'));
+                 console.log('🔍 Current user data:', localStorage.getItem('userData'));
+                 console.log('🔍 API base URL:', 'http://localhost:3000/api');
+                 
+                 // Check if user is logged in as kitchen staff
+                 const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+                 console.log('🔍 User role:', userData.role);
+                 console.log('🔍 User permissions:', userData.permissions);
+               }}
+               className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
+             >
+               Debug Info
+             </button>
+           </div>
+         </div>
+       </div>
 
       {/* Order Detail Modal */}
       {showOrderModal && selectedOrder && (
@@ -535,6 +864,19 @@ const KitchenDashboard: React.FC = () => {
           onComplete={markOrderComplete}
           canPrepare={canPrepareItem}
           ingredients={ingredients}
+          onViewHistory={fetchOrderHistory}
+        />
+      )}
+
+      {/* Order History Modal */}
+      {showHistoryModal && (
+        <OrderHistoryModal
+          orderHistory={orderHistory}
+          isLoading={isLoadingHistory}
+          onClose={() => {
+            setShowHistoryModal(false);
+            setOrderHistory([]);
+          }}
         />
       )}
     </div>
@@ -543,11 +885,11 @@ const KitchenDashboard: React.FC = () => {
 
 // Order Card Component
 interface OrderCardProps {
-  order: Order;
-  onStatusUpdate: (orderId: string, itemIndex: number, status: 'pending' | 'preparing' | 'ready') => void;
+  order: KitchenOrder;
+  onStatusUpdate: (orderId: string, status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => void;
   onComplete: (orderId: string) => void;
-  onViewDetails: (order: Order) => void;
-  canPrepare: (item: OrderItem) => boolean;
+  onViewDetails: (order: KitchenOrder) => void;
+  canPrepare: (item: KitchenOrderItem) => boolean;
   ingredients: Ingredient[];
 }
 
@@ -563,37 +905,38 @@ const OrderCard: React.FC<OrderCardProps> = ({
     <div className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getPriorityColor(order.priority)}`}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
-          <span className="font-medium text-gray-900">{order.id}</span>
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(order.priority)}`}>
-            {order.priority.toUpperCase()} PRIORITY
+          <span className="font-medium text-gray-900">{order.order_number}</span>
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(order.priority || 'medium')}`}>
+            {(order.priority || 'medium').toUpperCase()} PRIORITY
           </span>
         </div>
         <div className="text-right">
-          <p className="font-semibold text-gray-900">₱{order.total}</p>
-          <p className="text-xs text-gray-500">{order.orderTime}</p>
+          <p className="font-semibold text-gray-900">₱{order.total_amount}</p>
+          <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
         </div>
       </div>
 
-      <p className="text-sm text-gray-600 mb-3">{order.customer}</p>
+      <p className="text-sm text-gray-600 mb-3">{order.customer_name || 'Walk-in Customer'}</p>
       
-      {order.specialInstructions && (
+      {order.special_instructions && (
         <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-          📝 {order.specialInstructions}
+          📝 {order.special_instructions}
         </div>
       )}
       
       <div className="space-y-2 mb-4">
-        {order.items.map((item, index) => {
+        {order.items && order.items.length > 0 ? (
+          order.items.map((item, index) => {
           const canPrepareItem = canPrepare(item);
           return (
             <div key={index} className="flex items-center justify-between p-3 bg-white bg-opacity-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 {getStatusIcon(item.status)}
                 <div>
-                  <p className="font-medium text-gray-900">{item.name}</p>
+                    <p className="font-medium text-gray-900">{item.menu_item?.name || 'Unknown Item'}</p>
                   <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                  {item.specialInstructions && (
-                    <p className="text-xs text-blue-600">💡 {item.specialInstructions}</p>
+                    {item.special_instructions && (
+                      <p className="text-xs text-blue-600">💡 {item.special_instructions}</p>
                   )}
                 </div>
               </div>
@@ -601,14 +944,19 @@ const OrderCard: React.FC<OrderCardProps> = ({
                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
                   {item.status}
                 </span>
-                <p className="text-xs text-gray-500 mt-1">Est: {item.prepTime}m</p>
+                  <p className="text-xs text-gray-500 mt-1">Est: {item.menu_item?.prep_time || 0}m</p>
                 {!canPrepareItem && (
                   <p className="text-xs text-red-600 mt-1">⚠️ Missing ingredients</p>
                 )}
               </div>
             </div>
           );
-        })}
+          })
+        ) : (
+          <div className="text-center py-4 text-gray-500">
+            <p className="text-sm">No items found for this order</p>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between items-center">
@@ -621,6 +969,24 @@ const OrderCard: React.FC<OrderCardProps> = ({
         </button>
         
         <div className="flex space-x-2">
+          {order.status === 'pending' && (
+            <button 
+              onClick={() => onStatusUpdate(order.id, 'preparing', 'Started preparing order')}
+              className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 rounded hover:bg-blue-50"
+            >
+              Start Preparing
+            </button>
+          )}
+          
+          {order.status === 'preparing' && (
+            <button 
+              onClick={() => onStatusUpdate(order.id, 'ready', 'Order ready for pickup')}
+              className="px-3 py-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-300 rounded hover:bg-emerald-50"
+            >
+              Mark Ready
+            </button>
+          )}
+          
           {order.status === 'ready' && (
             <button 
               onClick={() => onComplete(order.id)}
@@ -637,12 +1003,13 @@ const OrderCard: React.FC<OrderCardProps> = ({
 
 // Order Detail Modal Component
 interface OrderDetailModalProps {
-  order: Order;
+  order: KitchenOrder;
   onClose: () => void;
-  onStatusUpdate: (orderId: string, itemIndex: number, status: 'pending' | 'preparing' | 'ready') => void;
+  onStatusUpdate: (orderId: string, status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => void;
   onComplete: (orderId: string) => void;
-  canPrepare: (item: OrderItem) => boolean;
+  canPrepare: (item: KitchenOrderItem) => boolean;
   ingredients: Ingredient[];
+  onViewHistory: (orderId: string) => void;
 }
 
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ 
@@ -651,7 +1018,8 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onStatusUpdate, 
   onComplete,
   canPrepare,
-  ingredients
+  ingredients,
+  onViewHistory
 }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -667,11 +1035,11 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           <div className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-medium text-gray-900 mb-2">Customer Information</h3>
-              <p className="text-gray-600">{order.customer}</p>
-              {order.specialInstructions && (
+              <p className="text-gray-600">{order.customer_name || 'Walk-in Customer'}</p>
+              {order.special_instructions && (
                 <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
                   <p className="text-sm text-yellow-800">
-                    <strong>Special Instructions:</strong> {order.specialInstructions}
+                    <strong>Special Instructions:</strong> {order.special_instructions}
                   </p>
                 </div>
               )}
@@ -679,51 +1047,31 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
             <div className="space-y-3">
               <h3 className="font-medium text-gray-900">Order Items</h3>
-              {order.items.map((item, index) => {
+              {order.items && order.items.length > 0 ? (
+                order.items.map((item, index) => {
                 const canPrepareItem = canPrepare(item);
                 return (
                   <div key={index} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="font-medium text-gray-900">{item.name}</h4>
+                          <h4 className="font-medium text-gray-900">{item.menu_item?.name || 'Unknown Item'}</h4>
                         <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                        <p className="text-sm text-gray-500">Prep Time: {item.prepTime} minutes</p>
+                          <p className="text-sm text-gray-500">Prep Time: {item.menu_item?.prep_time || 0} minutes</p>
                       </div>
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(item.status)}`}>
                         {item.status}
                       </span>
                     </div>
 
-                    {item.specialInstructions && (
+                      {item.special_instructions && (
                       <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-sm text-blue-800">
-                          <strong>Item Instructions:</strong> {item.specialInstructions}
+                            <strong>Item Instructions:</strong> {item.special_instructions}
                         </p>
                       </div>
                     )}
 
-                    <div className="mb-3">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Required Ingredients:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.ingredients.map((ingredient) => {
-                          const ing = ingredients.find(i => i.name === ingredient);
-                          return (
-                            <span 
-                              key={ingredient}
-                              className={`px-2 py-1 text-xs rounded-full ${
-                                ing?.status === 'out' 
-                                  ? 'bg-red-100 text-red-800' 
-                                  : ing?.status === 'low'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                            >
-                              {ingredient} {ing?.status === 'out' && '⚠️'}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
+                      {/* Ingredients section removed - would need API integration for ingredient requirements */}
 
                     {!canPrepareItem && (
                       <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
@@ -735,21 +1083,10 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => onStatusUpdate(order.id, index, 'pending')}
-                        disabled={item.status === 'pending'}
+                          onClick={() => onStatusUpdate(order.id, 'preparing', `Started preparing ${item.menu_item?.name}`)}
+                          disabled={order.status === 'preparing' || !canPrepareItem}
                         className={`px-3 py-1 text-xs font-medium rounded border ${
-                          item.status === 'pending'
-                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                            : 'text-amber-600 hover:text-amber-700 border-amber-300 hover:bg-amber-50'
-                        }`}
-                      >
-                        Mark Pending
-                      </button>
-                      <button
-                        onClick={() => onStatusUpdate(order.id, index, 'preparing')}
-                        disabled={item.status === 'preparing' || !canPrepareItem}
-                        className={`px-3 py-1 text-xs font-medium rounded border ${
-                          item.status === 'preparing' || !canPrepareItem
+                            order.status === 'preparing' || !canPrepareItem
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                             : 'text-blue-600 hover:text-blue-700 border-blue-300 hover:bg-blue-50'
                         }`}
@@ -757,10 +1094,10 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                         Start Preparing
                       </button>
                       <button
-                        onClick={() => onStatusUpdate(order.id, index, 'ready')}
-                        disabled={item.status === 'ready'}
+                          onClick={() => onStatusUpdate(order.id, 'ready', `Order ready for pickup`)}
+                          disabled={order.status === 'ready'}
                         className={`px-3 py-1 text-xs font-medium rounded border ${
-                          item.status === 'ready'
+                            order.status === 'ready'
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                             : 'text-emerald-600 hover:text-emerald-700 border-emerald-300 hover:bg-emerald-50'
                         }`}
@@ -770,15 +1107,27 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     </div>
                   </div>
                 );
-              })}
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-sm">No items found for this order</p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t">
               <div className="text-right">
                 <p className="text-sm text-gray-500">Total Amount</p>
-                <p className="text-xl font-bold text-gray-900">₱{order.total}</p>
+                <p className="text-xl font-bold text-gray-900">₱{order.total_amount}</p>
               </div>
               <div className="flex space-x-2">
+                <button
+                  onClick={() => onViewHistory(order.id)}
+                  className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 flex items-center space-x-1"
+                >
+                  <History className="h-4 w-4" />
+                  <span>View History</span>
+                </button>
                 <button
                   onClick={onClose}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
@@ -798,6 +1147,77 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Order History Modal Component
+interface OrderHistoryModalProps {
+  orderHistory: OrderStatusHistory[];
+  isLoading: boolean;
+  onClose: () => void;
+}
+
+const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
+  orderHistory,
+  isLoading,
+  onClose
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Order Status History</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">Loading history...</span>
+            </div>
+          ) : orderHistory.length > 0 ? (
+            <div className="space-y-4">
+              {orderHistory.map((history, index) => (
+                <div key={history.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(history.status)}`}>
+                      {history.status}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {new Date(history.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  <div className="text-sm text-gray-600">
+                    <p><strong>Updated by:</strong> {history.updated_by_name || history.updated_by}</p>
+                    {history.notes && (
+                      <p className="mt-1"><strong>Notes:</strong> {history.notes}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p>No status history available</p>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-4 border-t mt-6">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>

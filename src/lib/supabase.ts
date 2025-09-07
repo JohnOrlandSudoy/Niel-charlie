@@ -65,6 +65,36 @@ export interface Database {
   };
 }
 
+// Storage helper functions
+export const storageHelpers = {
+  // Get public URL for a file in storage
+  getPublicUrl: (bucketName: string, filePath: string) => {
+    const { data } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+    return data.publicUrl;
+  },
+
+  // Upload file to storage
+  uploadFile: async (bucketName: string, filePath: string, file: File) => {
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file);
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Delete file from storage
+  deleteFile: async (bucketName: string, filePath: string) => {
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .remove([filePath]);
+    
+    if (error) throw error;
+  }
+};
+
 // Auth helper functions
 export const authHelpers = {
   // Sign up with email and password

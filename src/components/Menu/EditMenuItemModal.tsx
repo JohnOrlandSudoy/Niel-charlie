@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Upload, Image as ImageIcon } from 'lucide-react';
-import { CreateMenuItemRequest, MenuCategory, ApiResponse } from '../../types/menu';
+import { MenuItem, MenuCategory, ApiResponse } from '../../types/menu';
 import { api } from '../../utils/api';
 
-interface AddMenuItemModalProps {
+interface EditMenuItemModalProps {
+  menuItem: MenuItem;
+  categories: MenuCategory[];
   onClose: () => void;
-  onSubmit: (data: CreateMenuItemRequest) => void;
+  onMenuItemUpdated?: (updatedItem: MenuItem) => void;
 }
 
-const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }) => {
+const EditMenuItemModal: React.FC<EditMenuItemModalProps> = ({ 
+  menuItem, 
+  categories, 
+  onClose, 
+  onMenuItemUpdated 
+}) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -20,72 +27,72 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
     calories: '',
     allergens: [] as string[]
   });
+  
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [allergenInput, setAllergenInput] = useState('');
-  const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch categories on component mount
+  // Initialize form data with existing menu item
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setIsLoadingCategories(true);
-        setCategoriesError(null);
-        
-        const response = await api.categories.getAll();
-        const result: ApiResponse<MenuCategory[]> = await response.json();
-        
-        if (result.success && result.data) {
-          setCategories(result.data.filter(category => category.is_active));
-        } else {
-          setCategoriesError(result.message || 'Failed to fetch categories');
-        }
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        setCategoriesError('Failed to fetch categories. Please try again.');
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    };
+    setFormData({
+      name: menuItem.name,
+      description: menuItem.description,
+      price: menuItem.price.toString(),
+      category_id: menuItem.category_id || '',
+      prep_time: menuItem.prep_time.toString(),
+      is_available: menuItem.is_available,
+      is_featured: menuItem.is_featured,
+      calories: menuItem.calories?.toString() || '',
+      allergens: menuItem.allergens || []
+    });
+  }, [menuItem]);
 
-    fetchCategories();
-  }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const menuItemData: CreateMenuItemRequest = {
-      name: formData.name,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      category_id: formData.category_id || undefined,
-      prep_time: parseInt(formData.prep_time),
-      is_available: formData.is_available,
-      is_featured: formData.is_featured,
-      calories: formData.calories ? parseInt(formData.calories) : undefined,
-      allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
-      image: selectedImage || undefined
-    };
-    
-    console.log('Submitting menu item data:', menuItemData);
-    onSubmit(menuItemData);
-  };
+    setIsLoading(true);
+    setError(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData({
-        ...formData,
-        [name]: checked
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
+    try {
+      // Validate price
+      const price = parseFloat(formData.price);
+      if (price <= 0) {
+        setError('Price must be greater than 0');
+        setIsLoading(false);
+        return;
+      }
+
+      const menuItemData = {
+        name: formData.name,
+        description: formData.description,
+        price: price,
+        category_id: formData.category_id || null,
+        prep_time: parseInt(formData.prep_time),
+        is_available: formData.is_available,
+        is_featured: formData.is_featured,
+        calories: formData.calories ? parseInt(formData.calories) : undefined,
+        allergens: formData.allergens.length > 0 ? formData.allergens : undefined
+      };
+
+      console.log('Updating menu item with data:', { id: menuItem.id, menuItemData, hasImage: !!selectedImage });
+
+      const response = await api.menus.update(menuItem.id, menuItemData, selectedImage || undefined);
+      const result: ApiResponse<MenuItem> = await response.json();
+
+      console.log('Update response:', result);
+
+      if (result.success && result.data) {
+        onMenuItemUpdated?.(result.data);
+        onClose();
+      } else {
+        setError(result.message || 'Failed to update menu item');
+      }
+    } catch (err) {
+      console.error('Error updating menu item:', err);
+      setError('Failed to update menu item. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -118,13 +125,22 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
     });
   };
 
-
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData({ ...formData, [name]: checked });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Add New Menu Item</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Edit Menu Item</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
@@ -134,10 +150,19 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <X className="h-5 w-5 text-red-600" />
+                <span className="text-red-800">{error}</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Item Name
+                Item Name *
               </label>
               <input
                 type="text"
@@ -151,40 +176,12 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category
-              </label>
-              {isLoadingCategories ? (
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  <span className="text-sm text-gray-500">Loading categories...</span>
-                </div>
-              ) : categoriesError ? (
-                <div className="text-red-600 text-sm">{categoriesError}</div>
-              ) : (
-                <select
-                  name="category_id"
-                  value={formData.category_id}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="">Select a category</option>
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Price (₱)
+                Price *
               </label>
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 name="price"
                 value={formData.price}
                 onChange={handleChange}
@@ -195,10 +192,30 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Prep Time (minutes)
+                Category
+              </label>
+              <select
+                name="category_id"
+                value={formData.category_id}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">No Category</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prep Time (minutes) *
               </label>
               <input
                 type="number"
+                min="1"
                 name="prep_time"
                 value={formData.prep_time}
                 onChange={handleChange}
@@ -206,20 +223,18 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
                 required
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Calories (optional)
+                Calories
               </label>
               <input
                 type="number"
+                min="0"
                 name="calories"
                 value={formData.calories}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., 350"
               />
             </div>
 
@@ -234,6 +249,7 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
                 />
                 <span className="ml-2 text-sm text-gray-700">Available</span>
               </label>
+              
               <label className="flex items-center">
                 <input
                   type="checkbox"
@@ -257,48 +273,46 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
               onChange={handleChange}
               rows={3}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
             />
           </div>
 
-          {/* Image Upload */}
+          {/* Image Upload Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Item Image
+              Item Image (Optional - leave empty to keep current image)
             </label>
-            <div className="space-y-4">
-              <div className="flex items-center justify-center w-full">
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="Preview" className="h-24 w-24 object-cover rounded" />
-                    ) : (
-                      <>
-                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                        <p className="mb-2 text-sm text-gray-500">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX. 10MB)</p>
-                      </>
-                    )}
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                  />
-                </label>
-              </div>
-              {selectedImage && (
-                <p className="text-sm text-gray-600">
-                  Selected: {selectedImage.name}
-                </p>
-              )}
+            <div className="flex items-center justify-center w-full">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Preview" className="h-24 w-24 object-cover rounded" />
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                      <p className="mb-2 text-sm text-gray-500">
+                        <span className="font-semibold">Click to upload</span> or drag and drop
+                      </p>
+                      <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX. 10MB)</p>
+                    </>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*" 
+                  onChange={handleImageChange}
+                />
+              </label>
             </div>
+            {selectedImage && (
+              <p className="text-sm text-gray-600 mt-2">Selected: {selectedImage.name}</p>
+            )}
+            {!selectedImage && menuItem.image_filename && (
+              <p className="text-sm text-gray-600 mt-2">Current image will be kept</p>
+            )}
           </div>
 
-          {/* Allergens */}
+          {/* Allergens Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Allergens (optional)
@@ -343,22 +357,26 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
             </div>
           </div>
 
-
-
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              disabled={isLoading}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200"
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50"
             >
-              <Save className="h-4 w-4" />
-              <span>Add Menu Item</span>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              <span>{isLoading ? 'Updating...' : 'Update Menu Item'}</span>
             </button>
           </div>
         </form>
@@ -367,4 +385,4 @@ const AddMenuItemModal: React.FC<AddMenuItemModalProps> = ({ onClose, onSubmit }
   );
 };
 
-export default AddMenuItemModal;
+export default EditMenuItemModal;

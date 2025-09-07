@@ -1,26 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { api } from '../../utils/api';
-import { CreateIngredientRequest, ApiResponse, Ingredient } from '../../types/inventory';
+import { Ingredient, UpdateIngredientRequest, ApiResponse } from '../../types/inventory';
 
-interface AddIngredientModalProps {
+interface EditIngredientModalProps {
+  ingredient: Ingredient;
   onClose: () => void;
-  onIngredientAdded?: (ingredient: Ingredient) => void;
+  onIngredientUpdated?: (ingredient: Ingredient) => void;
 }
 
-const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngredientAdded }) => {
+const EditIngredientModal: React.FC<EditIngredientModalProps> = ({ 
+  ingredient, 
+  onClose, 
+  onIngredientUpdated 
+}) => {
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    category: 'Meat',
-    current_stock: '',
-    unit: 'kg',
-    min_stock_threshold: '',
-    max_stock_threshold: '',
-    cost_per_unit: '',
-    supplier: '',
-    storage_location: '',
-    expiry_date: ''
+    name: ingredient.name,
+    description: ingredient.description || '',
+    category: ingredient.category || 'Meat',
+    current_stock: ingredient.current_stock.toString(),
+    unit: ingredient.unit,
+    min_stock_threshold: ingredient.min_stock_threshold?.toString() || '',
+    max_stock_threshold: ingredient.max_stock_threshold?.toString() || '',
+    cost_per_unit: ingredient.cost_per_unit?.toString() || '',
+    supplier: ingredient.supplier || '',
+    storage_location: ingredient.storage_location || '',
+    expiry_date: ingredient.expiry_date || ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +40,7 @@ const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngr
 
     try {
       // Prepare data for API
-      const ingredientData: CreateIngredientRequest = {
+      const updateData: UpdateIngredientRequest = {
         name: formData.name,
         unit: formData.unit,
         description: formData.description || undefined,
@@ -49,18 +54,25 @@ const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngr
         expiry_date: formData.expiry_date || undefined
       };
 
-      const response = await api.inventory.createIngredient(ingredientData);
+      console.log('Updating ingredient with data:', {
+        id: ingredient.id,
+        updateData
+      });
+      
+      const response = await api.inventory.updateIngredient(ingredient.id, updateData);
       const result: ApiResponse<Ingredient> = await response.json();
+      
+      console.log('Update response:', result);
 
       if (result.success && result.data) {
-        onIngredientAdded?.(result.data);
+        onIngredientUpdated?.(result.data);
         onClose();
       } else {
-        setError(result.message || 'Failed to create ingredient');
+        setError(result.message || 'Failed to update ingredient');
       }
     } catch (err) {
-      console.error('Error creating ingredient:', err);
-      setError('Failed to create ingredient. Please try again.');
+      console.error('Error updating ingredient:', err);
+      setError('Failed to update ingredient. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +89,7 @@ const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngr
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Add New Ingredient</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Edit Ingredient</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
@@ -280,7 +292,7 @@ const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngr
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              <span>{isLoading ? 'Adding...' : 'Add Ingredient'}</span>
+              <span>{isLoading ? 'Updating...' : 'Update Ingredient'}</span>
             </button>
           </div>
         </form>
@@ -289,4 +301,4 @@ const AddIngredientModal: React.FC<AddIngredientModalProps> = ({ onClose, onIngr
   );
 };
 
-export default AddIngredientModal;
+export default EditIngredientModal;

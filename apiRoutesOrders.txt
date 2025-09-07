@@ -1,0 +1,147 @@
+👥 1. CASHIER & ADMIN ENDPOINTS (13 endpoints)
+🔍 1.1 Order Retrieval & Search (4 endpoints)
+GET All Orders
+Endpoint: GET /api/orders/
+Authentication: cashierOrAdmin
+Purpose: Retrieve all orders with filtering and pagination
+Query Parameters:
+page (default: 1)
+limit (default: 50)
+status (filter by order status)
+order_type (dine_in, takeout)
+Features:
+✅ Pagination support
+✅ Status filtering
+✅ Order type filtering
+✅ Comprehensive order data
+Response: Paginated array with metadata
+Search Orders
+Endpoint: GET /api/orders/search
+Authentication: cashierOrAdmin
+Purpose: Search orders by customer name or order number
+Query Parameters:
+q (search term - required)
+page (default: 1)
+limit (default: 50)
+Features:
+✅ Text search functionality
+✅ Pagination support
+✅ Customer name search
+✅ Order number search
+Response: Paginated search results
+GET Order by ID
+Endpoint: GET /api/orders/:id
+Authentication: cashierOrAdmin
+Purpose: Get specific order details by UUID
+Parameters: id (UUID)
+Features:
+✅ Complete order information
+✅ Error handling for not found
+Response: Single order object
+GET Order by Order Number
+Endpoint: GET /api/orders/number/:orderNumber
+Authentication: cashierOrAdmin
+Purpose: Get order by human-readable order number
+Parameters: orderNumber (string)
+Features:
+✅ Order number lookup
+✅ Customer-friendly identifier
+Response: Single order object
+�� 1.2 Order Creation & Management (5 endpoints)
+CREATE New Order
+Endpoint: POST /api/orders/
+Authentication: cashierOrAdmin
+Purpose: Create new order with basic information
+Required Fields: order_type
+Optional Fields: customer_name, customer_phone, special_instructions, table_number, estimated_prep_time
+Validation:
+✅ Order type validation (dine_in, takeout)
+✅ Table number required for dine-in orders
+✅ User tracking (created_by)
+Response: Created order object
+ADD Item to Order
+Endpoint: POST /api/orders/:orderId/items
+Authentication: cashierOrAdmin
+Purpose: Add menu items to existing order
+Required Fields: menu_item_id, quantity
+Optional Fields: customizations, special_instructions
+Features:
+✅ Automatic price calculation
+✅ Menu item validation
+✅ Quantity validation (> 0)
+✅ Customizations support
+Response: Created order item object
+UPDATE Order Item
+Endpoint: PUT /api/orders/items/:itemId
+Authentication: cashierOrAdmin
+Purpose: Modify existing order items
+Parameters: itemId (UUID)
+Optional Fields: quantity, customizations, special_instructions
+Features:
+✅ Partial updates
+✅ Quantity validation
+✅ Customizations update
+Response: Updated order item object
+DELETE Order Item
+Endpoint: DELETE /api/orders/items/:itemId
+Authentication: cashierOrAdmin
+Purpose: Remove items from order
+Parameters: itemId (UUID)
+Features:
+✅ Item removal
+✅ Order cleanup
+Response: Success message
+GET Order Items
+Endpoint: GET /api/orders/:orderId/items
+Authentication: cashierOrAdmin
+Purpose: Retrieve all items for a specific order
+Parameters: orderId (UUID)
+Features:
+✅ Complete item details
+✅ Pricing information
+✅ Customizations data
+Response: Array of order items
+💳 1.3 Payment & Discount Management (4 endpoints)
+UPDATE Payment Status
+Endpoint: PUT /api/orders/:orderId/payment
+Authentication: cashierOrAdmin
+Purpose: Update order payment information
+Required Fields: payment_status
+Optional Fields: payment_method
+Validation:
+✅ Payment status validation (unpaid, paid, refunded)
+✅ Payment method validation (cash, gcash, card)
+Response: Updated order object
+GET Available Discounts
+Endpoint: GET /api/orders/discounts/available
+Authentication: cashierOrAdmin
+Purpose: Retrieve all active discounts
+Features:
+✅ Active discounts only
+✅ Discount details
+Response: Array of available discounts
+CREATE Discount (Admin Only)
+Endpoint: POST /api/orders/discounts
+Authentication: adminOnly
+Purpose: Create new discount codes
+Required Fields: code, name, discount_type, discount_value
+Optional Fields: description, minimum_order_amount, maximum_discount_amount, valid_until
+Features:
+✅ Code validation (uppercase)
+✅ Discount type support (percentage, fixed_amount)
+✅ Minimum order validation
+✅ Maximum discount limits
+✅ Expiration date handling
+Response: Created discount object
+APPLY Discount to Order
+Endpoint: POST /api/orders/:orderId/discounts
+Authentication: cashierOrAdmin
+Purpose: Apply discount code to order
+Required Fields: discount_code
+Features:
+✅ Discount validation
+✅ Minimum order amount check
+✅ Automatic discount calculation
+✅ Percentage and fixed amount support
+✅ Maximum discount limits
+Response: Applied discount details
