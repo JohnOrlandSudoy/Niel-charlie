@@ -145,3 +145,4 @@ Features:
 ✅ Percentage and fixed amount support
 ✅ Maximum discount limits
 Response: Applied discount details
+

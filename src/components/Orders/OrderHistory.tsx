@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2 } from 'lucide-react';
+import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Order as ApiOrder, OrderStats, PaginatedOrderResponse } from '../../types/orders';
 
@@ -14,6 +14,18 @@ const OrderHistory: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(20);
+  
+  // Delete functionality states
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bulkDeleteResults, setBulkDeleteResults] = useState<any[]>([]);
 
   // Fetch orders from API
   const fetchOrders = async (page: number = currentPage, resetPage: boolean = false) => {
@@ -129,6 +141,137 @@ const OrderHistory: React.FC = () => {
     }
   }, [currentPage]);
 
+  // Delete single order
+  const handleDeleteOrder = async (orderId: string, force: boolean = false) => {
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+      
+      const response = await api.orders.delete(orderId, force);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Remove order from local state
+        setOrders(prev => prev.filter(order => order.id !== orderId));
+        setTotalItems(prev => prev - 1);
+        setShowDeleteModal(false);
+        setDeleteOrderId(null);
+        
+        // Show success message
+        console.log('✅ Order deleted successfully');
+      } else {
+        setDeleteError(result.error || 'Failed to delete order');
+      }
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      setDeleteError('Failed to delete order. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Cancel order (soft delete)
+  const handleCancelOrder = async (orderId: string, reason: string) => {
+    try {
+      setIsCancelling(true);
+      setDeleteError(null);
+      
+      const response = await api.orders.cancel(orderId, reason);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Update order status in local state
+        setOrders(prev => prev.map(order => 
+          order.id === orderId 
+            ? { ...order, status: 'cancelled' }
+            : order
+        ));
+        setShowCancelModal(false);
+        setCancelOrderId(null);
+        setCancelReason('');
+        
+        // Show success message
+        console.log('✅ Order cancelled successfully');
+      } else {
+        setDeleteError(result.error || 'Failed to cancel order');
+      }
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      setDeleteError('Failed to cancel order. Please try again.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Bulk delete orders
+  const handleBulkDelete = async () => {
+    if (selectedOrders.length === 0) return;
+    
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+      
+      const response = await api.orders.bulkDelete(selectedOrders);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        setBulkDeleteResults(result.data || []);
+        
+        // Remove successfully deleted orders from local state
+        const deletedIds = result.data
+          ?.filter((item: any) => item.success)
+          ?.map((item: any) => item.orderId) || [];
+        
+        setOrders(prev => prev.filter(order => !deletedIds.includes(order.id)));
+        setTotalItems(prev => prev - deletedIds.length);
+        setSelectedOrders([]);
+        setShowDeleteModal(false);
+        
+        console.log('✅ Bulk delete completed');
+      } else {
+        setDeleteError(result.error || 'Failed to delete orders');
+      }
+    } catch (err) {
+      console.error('Error bulk deleting orders:', err);
+      setDeleteError('Failed to delete orders. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle order selection for bulk operations
+  const handleOrderSelect = (orderId: string) => {
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  // Handle select all orders
+  const handleSelectAll = () => {
+    if (selectedOrders.length === orders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(orders.map(order => order.id));
+    }
+  };
+
+  // Check if order can be deleted
+  const canDeleteOrder = (order: ApiOrder) => {
+    // Cannot delete paid orders
+    if (order.payment_status === 'paid') return false;
+    // Cannot delete completed orders without force
+    if (order.status === 'completed') return false;
+    return true;
+  };
+
+  // Check if order can be cancelled
+  const canCancelOrder = (order: ApiOrder) => {
+    // Cannot cancel completed or cancelled orders
+    return !['completed', 'cancelled'].includes(order.status);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -241,6 +384,42 @@ const OrderHistory: React.FC = () => {
             </select>
           </div>
         </div>
+        
+        {/* Bulk Actions */}
+        {selectedOrders.length > 0 && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  disabled={selectedOrders.length > 50}
+                  className="px-3 py-1 text-sm font-medium text-red-600 bg-red-100 border border-red-300 rounded hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete Selected</span>
+                </button>
+                <button
+                  onClick={() => setSelectedOrders([])}
+                  className="px-3 py-1 text-sm font-medium text-gray-600 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 flex items-center space-x-1"
+                >
+                  <X className="h-4 w-4" />
+                  <span>Clear Selection</span>
+                </button>
+              </div>
+            </div>
+            {selectedOrders.length > 50 && (
+              <p className="text-xs text-red-600 mt-2">
+                Maximum 50 orders can be deleted at once
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Orders Table */}
@@ -255,6 +434,14 @@ const OrderHistory: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.length === orders.length && orders.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Order Details
                   </th>
@@ -281,6 +468,14 @@ const OrderHistory: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.includes(order.id)}
+                        onChange={() => handleOrderSelect(order.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{order.order_number}</div>
@@ -341,12 +536,41 @@ const OrderHistory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-blue-600 hover:text-blue-700 p-1 rounded">
+                        <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button className="text-gray-600 hover:text-gray-700 p-1 rounded">
+                        <button className="text-gray-600 hover:text-gray-700 p-1 rounded" title="Print">
                           <Printer className="h-4 w-4" />
                         </button>
+                        {canCancelOrder(order) && (
+                          <button
+                            onClick={() => {
+                              setCancelOrderId(order.id);
+                              setShowCancelModal(true);
+                            }}
+                            className="text-orange-600 hover:text-orange-700 p-1 rounded" 
+                            title="Cancel Order"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDeleteOrder(order) && (
+                          <button
+                            onClick={() => {
+                              setDeleteOrderId(order.id);
+                              setShowDeleteModal(true);
+                            }}
+                            className="text-red-600 hover:text-red-700 p-1 rounded" 
+                            title="Delete Order"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        {!canDeleteOrder(order) && order.payment_status === 'paid' && (
+                          <span className="text-xs text-gray-400" title="Cannot delete paid orders">
+                            Protected
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -404,6 +628,190 @@ const OrderHistory: React.FC = () => {
                 className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  {selectedOrders.length > 1 ? 'Delete Orders' : 'Delete Order'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {selectedOrders.length > 1 
+                    ? `Are you sure you want to delete ${selectedOrders.length} orders? This action cannot be undone.`
+                    : 'Are you sure you want to delete this order? This action cannot be undone.'
+                  }
+                </p>
+              </div>
+            </div>
+            
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{deleteError}</p>
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteOrderId(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedOrders.length > 1) {
+                    handleBulkDelete();
+                  } else if (deleteOrderId) {
+                    handleDeleteOrder(deleteOrderId);
+                  }
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Order Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Cancel Order</h3>
+                <p className="text-sm text-gray-500">
+                  Please provide a reason for cancelling this order.
+                </p>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="cancelReason" className="block text-sm font-medium text-gray-700 mb-2">
+                Cancellation Reason
+              </label>
+              <textarea
+                id="cancelReason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Enter reason for cancellation..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                rows={3}
+                required
+              />
+            </div>
+            
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{deleteError}</p>
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelOrderId(null);
+                  setCancelReason('');
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
+                disabled={isCancelling}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (cancelOrderId && cancelReason.trim()) {
+                    handleCancelOrder(cancelOrderId, cancelReason.trim());
+                  }
+                }}
+                disabled={isCancelling || !cancelReason.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {isCancelling && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>{isCancelling ? 'Cancelling...' : 'Cancel Order'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Results Modal */}
+      {bulkDeleteResults.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Bulk Delete Results</h3>
+                <p className="text-sm text-gray-500">
+                  Results of the bulk delete operation
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2 mb-4">
+              {bulkDeleteResults.map((result, index) => (
+                <div key={index} className={`p-3 rounded-lg border ${
+                  result.success 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center space-x-2">
+                    {result.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                    )}
+                    <span className="text-sm font-medium">
+                      Order {result.orderNumber || result.orderId}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      result.success 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {result.success ? 'Deleted' : 'Failed'}
+                    </span>
+                  </div>
+                  {result.error && (
+                    <p className="text-xs text-red-600 mt-1">{result.error}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                onClick={() => setBulkDeleteResults([])}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
+              >
+                Close
               </button>
             </div>
           </div>

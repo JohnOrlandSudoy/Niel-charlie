@@ -386,5 +386,26 @@ export const api = {
 
     // GET Order Status History
     getOrderStatusHistory: (orderId: string) => apiRequest(`/orders/${orderId}/history`),
+
+    // DELETE Single Order (Admin Only)
+    delete: (orderId: string, force: boolean = false) =>
+      apiRequest(`/orders/${orderId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ force }),
+      }),
+
+    // DELETE Bulk Orders (Admin Only)
+    bulkDelete: (orderIds: string[]) =>
+      apiRequest('/orders/bulk/delete', {
+        method: 'DELETE',
+        body: JSON.stringify({ orderIds }),
+      }),
+
+    // CANCEL Order (Soft Delete)
+    cancel: (orderId: string, reason: string) =>
+      apiRequest(`/orders/${orderId}/cancel`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason }),
+      }),
   },
 };
