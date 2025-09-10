@@ -8,7 +8,7 @@ export interface Order {
   order_type: 'dine_in' | 'takeout';
   status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   payment_status: 'unpaid' | 'paid' | 'refunded';
-  payment_method?: 'cash' | 'gcash' | 'card';
+  payment_method?: 'cash' | 'gcash' | 'card' | 'paymongo';
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
@@ -21,6 +21,13 @@ export interface Order {
   created_by: string;
   updated_by?: string;
   items?: OrderItem[];
+  discount_applied?: {
+    id: string;
+    code: string;
+    name: string;
+    discount_type: 'percentage' | 'fixed_amount';
+    discount_value: number;
+  };
 }
 
 export interface OrderItem {

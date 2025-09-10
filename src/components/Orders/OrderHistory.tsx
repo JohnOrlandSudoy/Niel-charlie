@@ -26,6 +26,8 @@ const OrderHistory: React.FC = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [bulkDeleteResults, setBulkDeleteResults] = useState<any[]>([]);
+  const [forceDelete, setForceDelete] = useState(false);
+  const [showForceDeleteWarning, setShowForceDeleteWarning] = useState(false);
 
   // Fetch orders from API
   const fetchOrders = async (page: number = currentPage, resetPage: boolean = false) => {
@@ -147,6 +149,8 @@ const OrderHistory: React.FC = () => {
       setIsDeleting(true);
       setDeleteError(null);
       
+      console.log(`Deleting order ${orderId}${force ? ' with force' : ''}`);
+      
       const response = await api.orders.delete(orderId, force);
       const result = await response.json();
       
@@ -160,7 +164,7 @@ const OrderHistory: React.FC = () => {
         // Show success message
         console.log('✅ Order deleted successfully');
       } else {
-        setDeleteError(result.error || 'Failed to delete order');
+        setDeleteError(result.message || result.error || 'Failed to delete order');
       }
     } catch (err) {
       console.error('Error deleting order:', err);
@@ -204,14 +208,16 @@ const OrderHistory: React.FC = () => {
   };
 
   // Bulk delete orders
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = async (force: boolean = false) => {
     if (selectedOrders.length === 0) return;
     
     try {
       setIsDeleting(true);
       setDeleteError(null);
       
-      const response = await api.orders.bulkDelete(selectedOrders);
+      console.log(`Bulk deleting ${selectedOrders.length} orders${force ? ' with force' : ''}`);
+      
+      const response = await api.orders.bulkDelete(selectedOrders, force);
       const result = await response.json();
       
       if (response.ok && result.success) {
@@ -229,7 +235,7 @@ const OrderHistory: React.FC = () => {
         
         console.log('✅ Bulk delete completed');
       } else {
-        setDeleteError(result.error || 'Failed to delete orders');
+        setDeleteError(result.message || result.error || 'Failed to delete orders');
       }
     } catch (err) {
       console.error('Error bulk deleting orders:', err);
@@ -259,17 +265,40 @@ const OrderHistory: React.FC = () => {
 
   // Check if order can be deleted
   const canDeleteOrder = (order: ApiOrder) => {
-    // Cannot delete paid orders
+    // Cannot delete paid orders (must refund first)
     if (order.payment_status === 'paid') return false;
-    // Cannot delete completed orders without force
-    if (order.status === 'completed') return false;
+    // Completed orders can be deleted with force parameter
     return true;
+  };
+
+  // Check if order can be force deleted
+  const canForceDeleteOrder = (order: ApiOrder) => {
+    // Can force delete completed orders
+    return order.status === 'completed';
   };
 
   // Check if order can be cancelled
   const canCancelOrder = (order: ApiOrder) => {
     // Cannot cancel completed or cancelled orders
+    // Cannot cancel paid orders (must refund first)
+    if (order.payment_status === 'paid') return false;
     return !['completed', 'cancelled'].includes(order.status);
+  };
+
+  // Check if any selected orders need force delete
+  const needsForceDelete = () => {
+    return selectedOrders.some(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && canForceDeleteOrder(order);
+    });
+  };
+
+  // Check if any selected orders cannot be deleted
+  const hasNonDeletableOrders = () => {
+    return selectedOrders.some(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && !canDeleteOrder(order);
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -397,8 +426,14 @@ const OrderHistory: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setShowDeleteModal(true)}
-                  disabled={selectedOrders.length > 50}
+                  onClick={() => {
+                    if (needsForceDelete()) {
+                      setShowForceDeleteWarning(true);
+                    } else {
+                      setShowDeleteModal(true);
+                    }
+                  }}
+                  disabled={selectedOrders.length > 50 || hasNonDeletableOrders()}
                   className="px-3 py-1 text-sm font-medium text-red-600 bg-red-100 border border-red-300 rounded hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -413,11 +448,25 @@ const OrderHistory: React.FC = () => {
                 </button>
               </div>
             </div>
-            {selectedOrders.length > 50 && (
-              <p className="text-xs text-red-600 mt-2">
-                Maximum 50 orders can be deleted at once
-              </p>
-            )}
+            
+            {/* Warnings */}
+            <div className="mt-3 space-y-2">
+              {selectedOrders.length > 50 && (
+                <p className="text-xs text-red-600">
+                  Maximum 50 orders can be deleted at once
+                </p>
+              )}
+              {hasNonDeletableOrders() && (
+                <p className="text-xs text-red-600">
+                  Some selected orders cannot be deleted (paid orders must be refunded first)
+                </p>
+              )}
+              {needsForceDelete() && (
+                <p className="text-xs text-amber-600">
+                  Some selected orders are completed and will require force delete
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -558,16 +607,20 @@ const OrderHistory: React.FC = () => {
                           <button
                             onClick={() => {
                               setDeleteOrderId(order.id);
-                              setShowDeleteModal(true);
+                              if (canForceDeleteOrder(order)) {
+                                setShowForceDeleteWarning(true);
+                              } else {
+                                setShowDeleteModal(true);
+                              }
                             }}
                             className="text-red-600 hover:text-red-700 p-1 rounded" 
-                            title="Delete Order"
+                            title={canForceDeleteOrder(order) ? "Force Delete Order" : "Delete Order"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                         {!canDeleteOrder(order) && order.payment_status === 'paid' && (
-                          <span className="text-xs text-gray-400" title="Cannot delete paid orders">
+                          <span className="text-xs text-gray-400" title="Cannot delete paid orders - must refund first">
                             Protected
                           </span>
                         )}
@@ -667,6 +720,7 @@ const OrderHistory: React.FC = () => {
                   setShowDeleteModal(false);
                   setDeleteOrderId(null);
                   setDeleteError(null);
+                  setForceDelete(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
                 disabled={isDeleting}
@@ -676,9 +730,9 @@ const OrderHistory: React.FC = () => {
               <button
                 onClick={() => {
                   if (selectedOrders.length > 1) {
-                    handleBulkDelete();
+                    handleBulkDelete(forceDelete);
                   } else if (deleteOrderId) {
-                    handleDeleteOrder(deleteOrderId);
+                    handleDeleteOrder(deleteOrderId, forceDelete);
                   }
                 }}
                 disabled={isDeleting}
@@ -686,6 +740,60 @@ const OrderHistory: React.FC = () => {
               >
                 {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
                 <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Delete Warning Modal */}
+      {showForceDeleteWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  Force Delete Required
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {selectedOrders.length > 1 
+                    ? `Some of the selected orders are completed and require force delete. This action cannot be undone.`
+                    : 'This order is completed and requires force delete. This action cannot be undone.'
+                  }
+                </p>
+              </div>
+            </div>
+            
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Warning:</strong> Force delete will permanently remove completed orders from the system. 
+                This action cannot be undone and may affect reporting and analytics.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowForceDeleteWarning(false);
+                  setDeleteOrderId(null);
+                  setForceDelete(false);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setForceDelete(true);
+                  setShowForceDeleteWarning(false);
+                  setShowDeleteModal(true);
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-lg hover:bg-amber-700"
+              >
+                Force Delete
               </button>
             </div>
           </div>

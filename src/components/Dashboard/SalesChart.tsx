@@ -1,22 +1,49 @@
 import React, { useState } from 'react';
-import { BarChart3, TrendingUp } from 'lucide-react';
+import { BarChart3, TrendingUp, Loader2 } from 'lucide-react';
+import { useDashboardData } from '../../hooks/useDashboardData';
 
 const SalesChart: React.FC = () => {
   const [timeRange, setTimeRange] = useState('week');
-  
-  const salesData = {
-    week: [
-      { day: 'Mon', sales: 8500, orders: 45 },
-      { day: 'Tue', sales: 12200, orders: 67 },
-      { day: 'Wed', sales: 9800, orders: 52 },
-      { day: 'Thu', sales: 15600, orders: 78 },
-      { day: 'Fri', sales: 18900, orders: 89 },
-      { day: 'Sat', sales: 22400, orders: 112 },
-      { day: 'Sun', sales: 19700, orders: 95 },
-    ]
+  const { salesData, stats, isLoading, error } = useDashboardData();
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
-  const maxSales = Math.max(...salesData.week.map(d => d.sales));
+  const maxSales = salesData.length > 0 ? Math.max(...salesData.map(d => d.sales)) : 0;
+  const totalSales = salesData.reduce((sum, day) => sum + day.sales, 0);
+  const totalOrders = salesData.reduce((sum, day) => sum + day.orders, 0);
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+            <p className="text-gray-600">Loading sales data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center text-red-600">
+            <p>Failed to load sales data</p>
+            <p className="text-sm text-gray-500 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -44,38 +71,49 @@ const SalesChart: React.FC = () => {
       </div>
 
       <div className="h-64 flex items-end space-x-4">
-        {salesData.week.map((data, index) => (
+        {salesData.length > 0 ? salesData.map((data, index) => (
           <div key={index} className="flex-1 flex flex-col items-center">
             <div className="w-full flex flex-col items-center space-y-2">
               <div
                 className="w-full bg-blue-600 rounded-t-md transition-all duration-500 ease-out hover:bg-blue-700 cursor-pointer"
                 style={{
-                  height: `${(data.sales / maxSales) * 180}px`,
+                  height: `${maxSales > 0 ? (data.sales / maxSales) * 180 : 20}px`,
                   minHeight: '20px'
                 }}
-                title={`₱${data.sales.toLocaleString()}`}
+                title={`${formatCurrency(data.sales)} - ${data.orders} orders`}
               />
               <div className="text-center">
-                <p className="text-xs font-medium text-gray-900">₱{(data.sales / 1000).toFixed(1)}k</p>
+                <p className="text-xs font-medium text-gray-900">
+                  {data.sales > 1000 ? `${(data.sales / 1000).toFixed(1)}k` : data.sales}
+                </p>
                 <p className="text-xs text-gray-500">{data.day}</p>
               </div>
             </div>
           </div>
-        ))}
+        )) : (
+          <div className="flex-1 flex items-center justify-center h-full">
+            <p className="text-gray-500">No sales data available</p>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <TrendingUp className="h-4 w-4 text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-600">+15.2%</span>
-            <span className="text-sm text-gray-500">vs last week</span>
+            <span className={`text-sm font-medium ${
+              stats.salesGrowth >= 0 ? 'text-emerald-600' : 'text-red-600'
+            }`}>
+              {stats.salesGrowth >= 0 ? '+' : ''}{stats.salesGrowth.toFixed(1)}%
+            </span>
+            <span className="text-sm text-gray-500">vs yesterday</span>
           </div>
         </div>
         
         <div className="text-right">
-          <p className="text-sm text-gray-500">Total Sales</p>
-          <p className="text-lg font-bold text-gray-900">₱107,100</p>
+          <p className="text-sm text-gray-500">Total Sales (7 days)</p>
+          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalSales)}</p>
+          <p className="text-xs text-gray-500">{totalOrders} orders</p>
         </div>
       </div>
     </div>

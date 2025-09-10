@@ -356,18 +356,18 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
-    // GET Available Discounts
-    getAvailableDiscounts: () => apiRequest('/orders/discounts/available'),
-
-    // CREATE Discount (Admin Only)
-    createDiscount: (data: any) =>
-      apiRequest('/orders/discounts', {
+    // PayMongo Payment Integration
+    createPayMongoPayment: (orderId: string, data: any) =>
+      apiRequest(`/orders/${orderId}/paymongo-payment`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
+    // GET Available Discounts
+    getAvailableDiscounts: () => apiRequest('/orders/discounts/available'),
+
     // APPLY Discount to Order
-    applyDiscount: (orderId: string, data: any) =>
+    applyDiscount: (orderId: string, data: { discount_code: string }) =>
       apiRequest(`/orders/${orderId}/discounts`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -388,17 +388,18 @@ export const api = {
     getOrderStatusHistory: (orderId: string) => apiRequest(`/orders/${orderId}/history`),
 
     // DELETE Single Order (Admin Only)
-    delete: (orderId: string, force: boolean = false) =>
-      apiRequest(`/orders/${orderId}`, {
+    delete: (orderId: string, force: boolean = false) => {
+      const url = force ? `/orders/${orderId}?force=true` : `/orders/${orderId}`;
+      return apiRequest(url, {
         method: 'DELETE',
-        body: JSON.stringify({ force }),
-      }),
+      });
+    },
 
     // DELETE Bulk Orders (Admin Only)
-    bulkDelete: (orderIds: string[]) =>
+    bulkDelete: (orderIds: string[], force: boolean = false) =>
       apiRequest('/orders/bulk/delete', {
         method: 'DELETE',
-        body: JSON.stringify({ orderIds }),
+        body: JSON.stringify({ orderIds, force }),
       }),
 
     // CANCEL Order (Soft Delete)
@@ -406,6 +407,85 @@ export const api = {
       apiRequest(`/orders/${orderId}/cancel`, {
         method: 'PUT',
         body: JSON.stringify({ reason }),
+      }),
+  },
+
+  // Payments endpoints
+  payments: {
+    // GET Payment Status
+    getStatus: (paymentIntentId: string) => 
+      apiRequest(`/payments/status/${paymentIntentId}`),
+
+    // CANCEL Payment
+    cancel: (paymentIntentId: string) =>
+      apiRequest(`/payments/cancel/${paymentIntentId}`, {
+        method: 'POST',
+      }),
+  },
+
+  // Discounts endpoints
+  discounts: {
+    // GET All Discounts (Admin Only) - Using the same endpoint as available since that's what's implemented
+    getAll: (params?: {
+      page?: number;
+      limit?: number;
+      status?: 'active' | 'inactive' | 'expired';
+      search?: string;
+    }) => {
+      // For now, we'll use the available endpoint since that's what's implemented
+      // The filtering will be done on the frontend
+      return apiRequest('/orders/discounts/available');
+    },
+
+    // GET Available Discounts (Cashier/Admin)
+    getAvailable: () => apiRequest('/orders/discounts/available'),
+
+    // GET Discount by ID
+    getById: (id: string) => apiRequest(`/orders/discounts/${id}`),
+
+    // CREATE Discount (Admin Only)
+    create: (data: any) =>
+      apiRequest('/orders/discounts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    // UPDATE Discount (Admin Only)
+    update: (id: string, data: any) =>
+      apiRequest(`/orders/discounts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+
+    // DELETE Discount (Admin Only)
+    delete: (id: string) =>
+      apiRequest(`/orders/discounts/${id}`, {
+        method: 'DELETE',
+      }),
+
+    // TOGGLE Discount Status (Admin Only)
+    toggleStatus: (id: string) =>
+      apiRequest(`/orders/discounts/${id}/toggle`, {
+        method: 'PUT',
+      }),
+
+    // GET Discount Statistics (Admin Only)
+    getStats: () => apiRequest('/orders/discounts/stats'),
+
+    // VALIDATE Discount Code
+    validate: (code: string, orderAmount?: number) => {
+      const queryParams = new URLSearchParams();
+      queryParams.append('code', code);
+      if (orderAmount) queryParams.append('order_amount', orderAmount.toString());
+      
+      return apiRequest(`/orders/discounts/validate?${queryParams.toString()}`);
+    },
+
+    // APPLY Discount to Order
+    applyToOrder: (orderId: string, discountCode: string) =>
+      apiRequest(`/orders/${orderId}/discounts`, {
+        method: 'POST',
+        body: JSON.stringify({ discount_code: discountCode }),
       }),
   },
 };

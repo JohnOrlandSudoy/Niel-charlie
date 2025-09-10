@@ -5,6 +5,7 @@ import Dashboard from '../Dashboard/Dashboard';
 import InventoryManagement from '../Inventory/InventoryManagement';
 import MenuManagement from '../Menu/MenuManagement';
 import CategoryManagement from '../Menu/CategoryManagement';
+import DiscountManagement from '../Discounts/DiscountManagement';
 import OrderHistory from '../Orders/OrderHistory';
 import Settings from '../Settings/Settings';
 
@@ -27,6 +28,8 @@ const AdminLayout: React.FC = () => {
         return <MenuManagement />;
       case 'categories':
         return <CategoryManagement />;
+      case 'discounts':
+        return <DiscountManagement />;
       case 'orders':
         return <OrderHistory />;
       case 'settings':

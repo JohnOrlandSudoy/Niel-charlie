@@ -1,54 +1,9 @@
 import React from 'react';
-import { AlertTriangle, Package, XCircle } from 'lucide-react';
+import { AlertTriangle, Package, XCircle, Loader2, Plus } from 'lucide-react';
+import { useDashboardData } from '../../hooks/useDashboardData';
 
 const InventoryAlerts: React.FC = () => {
-  const alerts = [
-    {
-      id: 1,
-      item: 'Chicken Breast',
-      current: 5,
-      minimum: 10,
-      unit: 'kg',
-      status: 'low',
-      affectedItems: ['Chicken Pastil', 'Chicken Adobo']
-    },
-    {
-      id: 2,
-      item: 'Black Pepper',
-      current: 0,
-      minimum: 2,
-      unit: 'kg',
-      status: 'out',
-      affectedItems: ['Chicken Pastil', 'Beef Steak']
-    },
-    {
-      id: 3,
-      item: 'Soy Sauce',
-      current: 3,
-      minimum: 5,
-      unit: 'bottles',
-      status: 'low',
-      affectedItems: ['Pork Adobo', 'Chicken Pastil']
-    },
-    {
-      id: 4,
-      item: 'Rice',
-      current: 2,
-      minimum: 10,
-      unit: 'sacks',
-      status: 'low',
-      affectedItems: ['All Rice Dishes']
-    },
-    {
-      id: 5,
-      item: 'Cooking Oil',
-      current: 0,
-      minimum: 3,
-      unit: 'liters',
-      status: 'out',
-      affectedItems: ['All Fried Items']
-    }
-  ];
+  const { lowStockAlerts, stats, isLoading, error } = useDashboardData();
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -72,51 +27,112 @@ const InventoryAlerts: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+            <p className="text-gray-600">Loading inventory alerts...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center text-red-600">
+            <p>Failed to load inventory data</p>
+            <p className="text-sm text-gray-500 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Inventory Alerts</h3>
-        <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
-          {alerts.filter(alert => alert.status === 'out').length} Critical
-        </span>
+        <div className="flex items-center space-x-2">
+          {stats.outOfStockItems > 0 && (
+            <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+              {stats.outOfStockItems} Critical
+            </span>
+          )}
+          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
+            <Plus className="h-4 w-4" />
+            <span>Restock</span>
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {alerts.map((alert) => (
-          <div
-            key={alert.id}
-            className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getStatusColor(alert.status)}`}
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                {getStatusIcon(alert.status)}
-                <span className="font-medium">{alert.item}</span>
+        {lowStockAlerts.length > 0 ? lowStockAlerts.map((alert) => {
+          const status = alert.current_stock === 0 ? 'out' : 'low';
+          return (
+            <div
+              key={alert.id}
+              className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getStatusColor(status)}`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  {getStatusIcon(status)}
+                  <span className="font-medium">{alert.name}</span>
+                </div>
+                <span className="text-xs font-medium uppercase">
+                  {status === 'out' ? 'OUT OF STOCK' : 'LOW STOCK'}
+                </span>
               </div>
-              <span className="text-xs font-medium uppercase">
-                {alert.status === 'out' ? 'OUT OF STOCK' : 'LOW STOCK'}
-              </span>
-            </div>
 
-            <div className="text-sm mb-2">
-              <span className="font-medium">
-                {alert.current} {alert.unit}
-              </span>
-              <span className="text-gray-600"> remaining (min: {alert.minimum} {alert.unit})</span>
-            </div>
+              <div className="text-sm mb-2">
+                <span className="font-medium">
+                  {alert.current_stock} {alert.unit}
+                </span>
+                <span className="text-gray-600"> remaining (min: {alert.minimum_stock} {alert.unit})</span>
+              </div>
 
-            <div className="text-xs">
-              <span className="font-medium">Affected items: </span>
-              <span className="text-gray-600">{alert.affectedItems.join(', ')}</span>
-            </div>
+              {alert.menu_items && alert.menu_items.length > 0 && (
+                <div className="text-xs">
+                  <span className="font-medium">Affected items: </span>
+                  <span className="text-gray-600">
+                    {alert.menu_items.slice(0, 3).map((item: any) => item.name).join(', ')}
+                    {alert.menu_items.length > 3 && ` +${alert.menu_items.length - 3} more`}
+                  </span>
+                </div>
+              )}
 
-            <div className="flex justify-end mt-3">
-              <button className="text-xs font-medium text-blue-600 hover:text-blue-700">
-                Restock Now
-              </button>
+              <div className="flex justify-end mt-3">
+                <button className="text-xs font-medium text-blue-600 hover:text-blue-700">
+                  Restock Now
+                </button>
+              </div>
             </div>
+          );
+        }) : (
+          <div className="text-center py-8">
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">No inventory alerts</p>
+            <p className="text-sm text-gray-400 mt-1">All items are well stocked</p>
           </div>
-        ))}
+        )}
       </div>
+
+      {lowStockAlerts.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">
+              {stats.lowStockItems + stats.outOfStockItems} items need attention
+            </span>
+            <button className="text-blue-600 hover:text-blue-700 font-medium">
+              View All Alerts
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

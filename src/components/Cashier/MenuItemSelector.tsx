@@ -1,72 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Clock, AlertTriangle, CheckCircle, Package, Image as ImageIcon } from 'lucide-react';
-import { api } from '../../utils/api';
-import { MenuItem, ApiResponse } from '../../types/menu';
-import { storageHelpers } from '../../lib/supabase';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Search, Clock, AlertTriangle, CheckCircle, Package, Image as ImageIcon, XCircle } from 'lucide-react';
+import { MenuItem } from '../../types/menu';
+import { useMenuItemSelection } from '../../hooks/useMenuItemSelection';
+import { useInventoryStock } from '../../hooks/useInventoryStock';
 
 interface MenuItemSelectorProps {
   onAddToOrder: (menuItem: MenuItem, quantity: number, customizations?: string, specialInstructions?: string) => void;
   onClose: () => void;
 }
 
-const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClose }) => {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [categories, setCategories] = useState<string[]>([]);
+const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToOrder, onClose }) => {
+  // Use the custom hook for menu item management
+  const {
+    menuItems,
+    isLoading,
+    error,
+    searchQuery,
+    setSearchQuery,
+    filterCategory,
+    setFilterCategory,
+    categories,
+    imageErrors,
+    filteredItems,
+    fetchMenuItems,
+    getImageUrl,
+    handleImageError,
+    getCategoryName
+  } = useMenuItemSelection();
+
+  // Use inventory stock checking
+  const {
+    checkMenuItemStock,
+    isLoading: isStockLoading
+  } = useInventoryStock();
   
   // Selected item state
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [customizations, setCustomizations] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
-
-  // Fetch menu items
-  const fetchMenuItems = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await api.menus.getAll();
-      const result: ApiResponse<MenuItem[]> = await response.json();
-      
-      if (result.success && result.data) {
-        setMenuItems(result.data);
-        
-        // Extract unique categories
-        const uniqueCategories = [...new Set(result.data.map(item => item.category_id).filter(Boolean))];
-        setCategories(uniqueCategories);
-      } else {
-        setError(result.message || 'Failed to fetch menu items');
-      }
-    } catch (err) {
-      console.error('Error fetching menu items:', err);
-      setError('Failed to fetch menu items. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchMenuItems();
-  }, []);
+  }, [fetchMenuItems]);
 
-  // Filter menu items
-  const filteredItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesCategory = filterCategory === 'all' || item.category_id === filterCategory;
-    const isAvailable = item.is_available;
-    
-    return matchesSearch && matchesCategory && isAvailable;
-  });
-
-  const handleAddToOrder = () => {
+  const handleAddToOrder = useCallback(() => {
     if (selectedItem && quantity > 0) {
+      // Check stock before adding to order
+      const stockStatus = checkMenuItemStock(selectedItem, quantity);
+      if (!stockStatus.isAvailable) {
+        alert(`Cannot add ${selectedItem.name}: ${stockStatus.stockMessage}`);
+        return;
+      }
+      
       onAddToOrder(selectedItem, quantity, customizations, specialInstructions);
       // Reset form
       setSelectedItem(null);
@@ -74,26 +60,33 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
       setCustomizations('');
       setSpecialInstructions('');
     }
-  };
+  }, [selectedItem, quantity, customizations, specialInstructions, onAddToOrder, checkMenuItemStock]);
 
-  const getCategoryName = (categoryId: string | null) => {
-    if (!categoryId) return 'No Category';
-    // You might want to fetch category names from your categories API
-    return categoryId;
-  };
-
-  // Get image URL for menu item
-  const getImageUrl = (item: MenuItem) => {
-    if (item.image_filename) {
-      return storageHelpers.getPublicUrl('menu-item-images', item.image_filename);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
     }
-    return null;
-  };
+  }, [onClose]);
 
-  // Handle image error
-  const handleImageError = (itemId: string) => {
-    setImageErrors(prev => new Set(prev).add(itemId));
-  };
+  const handleItemSelect = useCallback((item: MenuItem) => {
+    setSelectedItem(item);
+  }, []);
+
+  const handleQuantityChange = useCallback((newQuantity: number) => {
+    setQuantity(Math.max(1, newQuantity));
+  }, []);
+
+  const handleCustomizationsChange = useCallback((value: string) => {
+    setCustomizations(value);
+  }, []);
+
+  const handleSpecialInstructionsChange = useCallback((value: string) => {
+    setSpecialInstructions(value);
+  }, []);
+
+  const totalPrice = useMemo(() => {
+    return selectedItem ? selectedItem.price * quantity : 0;
+  }, [selectedItem, quantity]);
 
   if (isLoading) {
     return (
@@ -109,13 +102,20 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="menu-selector-title"
+      onKeyDown={handleKeyDown}
+    >
       <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Select Menu Item</h2>
+          <h2 id="menu-selector-title" className="text-xl font-semibold text-gray-900">Select Menu Item</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Close menu selector"
           >
             <span className="text-gray-500">×</span>
           </button>
@@ -142,7 +142,8 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                     placeholder="Search menu items..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    aria-label="Search menu items"
                   />
                 </div>
               </div>
@@ -151,7 +152,8 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                  aria-label="Filter by category"
                 >
                   <option value="all">All Categories</option>
                   {categories.map(category => (
@@ -165,20 +167,33 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
           </div>
 
           {/* Menu Items Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" role="list" aria-label="Available menu items">
             {filteredItems.map(item => {
               const imageUrl = getImageUrl(item);
               const hasImageError = imageErrors.has(item.id);
+              const stockStatus = checkMenuItemStock(item);
+              const isDisabled = !stockStatus.isAvailable;
               
               return (
                 <div
                   key={item.id}
-                  onClick={() => setSelectedItem(item)}
-                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedItem?.id === item.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                  onClick={() => !isDisabled && handleItemSelect(item)}
+                  className={`p-4 border-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDisabled
+                      ? 'border-red-200 bg-red-50 cursor-not-allowed opacity-60'
+                      : selectedItem?.id === item.id
+                        ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                        : 'border-gray-200 hover:border-gray-300 cursor-pointer'
                   }`}
+                  role="listitem"
+                  tabIndex={isDisabled ? -1 : 0}
+                  onKeyDown={(e) => {
+                    if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleItemSelect(item);
+                    }
+                  }}
+                  aria-label={`${isDisabled ? 'Out of stock: ' : ''}Select ${item.name} - ₱${item.price}`}
                 >
                   {/* Menu Item Image */}
                   <div className="relative mb-3">
@@ -199,6 +214,20 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                     <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-sm font-medium">
                       ₱{item.price}
                     </div>
+                    
+                    {/* Stock Status Badge */}
+                    {stockStatus.isOutOfStock && (
+                      <div className="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+                        <XCircle className="h-3 w-3" />
+                        <span>Out of Stock</span>
+                      </div>
+                    )}
+                    {stockStatus.isLowStock && !stockStatus.isOutOfStock && (
+                      <div className="absolute top-2 left-2 bg-amber-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        <span>Low Stock</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -220,8 +249,22 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                       )}
                       
                       <div className="flex items-center space-x-1">
-                        <CheckCircle className="h-3 w-3 text-green-500" />
-                        <span>Available</span>
+                        {stockStatus.isOutOfStock ? (
+                          <>
+                            <XCircle className="h-3 w-3 text-red-500" />
+                            <span className="text-red-600">Out of Stock</span>
+                          </>
+                        ) : stockStatus.isLowStock ? (
+                          <>
+                            <AlertTriangle className="h-3 w-3 text-amber-500" />
+                            <span className="text-amber-600">Low Stock</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                            <span>Available</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -242,6 +285,37 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
           {selectedItem && (
             <div className="bg-gray-50 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Add to Order</h3>
+              
+              {/* Stock Status Alert */}
+              {(() => {
+                const stockStatus = checkMenuItemStock(selectedItem, quantity);
+                if (stockStatus.isOutOfStock) {
+                  return (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <XCircle className="h-5 w-5 text-red-600" />
+                        <div>
+                          <h4 className="text-red-800 font-medium">Out of Stock</h4>
+                          <p className="text-red-700 text-sm">{stockStatus.stockMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else if (stockStatus.isLowStock) {
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                        <div>
+                          <h4 className="text-amber-800 font-medium">Low Stock Warning</h4>
+                          <p className="text-amber-700 text-sm">{stockStatus.stockMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -281,8 +355,9 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                     </label>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="p-1 border border-gray-300 rounded hover:bg-gray-50"
+                        onClick={() => handleQuantityChange(quantity - 1)}
+                        className="p-1 border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Decrease quantity"
                       >
                         -
                       </button>
@@ -290,12 +365,14 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                         type="number"
                         min="1"
                         value={quantity}
-                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-16 text-center border border-gray-300 rounded px-2 py-1"
+                        onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                        className="w-16 text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Quantity"
                       />
                       <button
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="p-1 border border-gray-300 rounded hover:bg-gray-50"
+                        onClick={() => handleQuantityChange(quantity + 1)}
+                        className="p-1 border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Increase quantity"
                       >
                         +
                       </button>
@@ -309,9 +386,10 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                     <input
                       type="text"
                       value={customizations}
-                      onChange={(e) => setCustomizations(e.target.value)}
+                      onChange={(e) => handleCustomizationsChange(e.target.value)}
                       placeholder="e.g., Extra spicy, No onions"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      aria-label="Customizations"
                     />
                   </div>
                   
@@ -321,10 +399,11 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
                     </label>
                     <textarea
                       value={specialInstructions}
-                      onChange={(e) => setSpecialInstructions(e.target.value)}
+                      onChange={(e) => handleSpecialInstructionsChange(e.target.value)}
                       placeholder="Any special preparation instructions..."
                       rows={3}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      aria-label="Special instructions"
                     />
                   </div>
                 </div>
@@ -332,22 +411,29 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
               
               <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
                 <div className="text-lg font-semibold">
-                  Total: ₱{(selectedItem.price * quantity).toFixed(2)}
+                  Total: ₱{totalPrice.toFixed(2)}
                 </div>
                 
                 <div className="flex space-x-3">
                   <button
                     onClick={() => setSelectedItem(null)}
-                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    aria-label="Cancel item selection"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleAddToOrder}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200"
+                    disabled={checkMenuItemStock(selectedItem, quantity).isOutOfStock}
+                    className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 ${
+                      checkMenuItemStock(selectedItem, quantity).isOutOfStock
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                    }`}
+                    aria-label={`Add ${selectedItem?.name} to order`}
                   >
-                    <Plus className="h-4 w-4" />
-                    <span>Add to Order</span>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    <span>{checkMenuItemStock(selectedItem, quantity).isOutOfStock ? 'Out of Stock' : 'Add to Order'}</span>
                   </button>
                 </div>
               </div>
@@ -357,6 +443,8 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = ({ onAddToOrder, onClo
       </div>
     </div>
   );
-};
+});
+
+MenuItemSelector.displayName = 'MenuItemSelector';
 
 export default MenuItemSelector;
