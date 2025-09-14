@@ -408,25 +408,92 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ reason }),
       }),
+
+    // GET Order Receipt
+    getReceipt: (orderId: string) =>
+      apiRequest(`/orders/${orderId}/receipt`),
   },
 
   // Payments endpoints
   payments: {
-    // GET Payment Status
-    getStatus: (paymentIntentId: string) => 
-      apiRequest(`/payments/status/${paymentIntentId}`),
+    // GET Payment Status (using order-based endpoint)
+    getStatus: (orderId: string) => 
+      apiRequest(`/orders/${orderId}/payment-status`),
+
+    // GET All Orders with PayMongo Payments (for admin management)
+    getOrdersWithPayMongoPayments: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+    }) => {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.limit) queryParams.append('limit', params.limit.toString());
+      if (params?.status) queryParams.append('payment_method', 'paymongo');
+      
+      const query = queryParams.toString();
+      return apiRequest(`/orders${query ? `?${query}` : ''}`);
+    },
 
     // CANCEL Payment
     cancel: (paymentIntentId: string) =>
       apiRequest(`/payments/cancel/${paymentIntentId}`, {
         method: 'POST',
       }),
+
+    // WEBHOOK Processing (Internal - for PayMongo webhooks)
+    processWebhook: (webhookData: any) =>
+      apiRequest('/payments/webhook', {
+        method: 'POST',
+        body: JSON.stringify(webhookData),
+      }),
+
+    // GET Payment History for Order
+    getPaymentHistory: (orderId: string) =>
+      apiRequest(`/payments/order/${orderId}/history`),
+
+    // MANUAL Payment Sync (Backup when webhooks fail)
+    syncPayment: (orderId: string) =>
+      apiRequest(`/orders/${orderId}/sync-payment`, {
+        method: 'POST',
+      }),
+
+    // Admin Payment Methods Management
+    getAdminMethods: () => 
+      apiRequest('/payments/admin/methods'),
+
+    toggleMethod: (methodKey: string, isEnabled: boolean) =>
+      apiRequest(`/payments/admin/methods/${methodKey}/toggle`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_enabled: isEnabled }),
+      }),
+
+    updateMethod: (methodKey: string, data: any) =>
+      apiRequest(`/payments/admin/methods/${methodKey}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+
+    createMethod: (data: any) =>
+      apiRequest('/payments/admin/methods', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    deleteMethod: (methodKey: string) =>
+      apiRequest(`/payments/admin/methods/${methodKey}`, {
+        method: 'DELETE',
+      }),
+
+    // Public Payment Methods (Cashier - only enabled methods)
+    getAvailableMethods: () => 
+      apiRequest('/payments/methods/available'),
   },
 
   // Discounts endpoints
   discounts: {
     // GET All Discounts (Admin Only) - Using the same endpoint as available since that's what's implemented
-    getAll: (params?: {
+    getAll: (_params?: {
       page?: number;
       limit?: number;
       status?: 'active' | 'inactive' | 'expired';

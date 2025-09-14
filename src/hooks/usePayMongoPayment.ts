@@ -48,8 +48,8 @@ export const usePayMongoPayment = () => {
       setPaymentIntent(result.data);
       setShowPayMongoModal(true);
       
-      // Start status checking
-      startStatusChecking(result.data.paymentIntentId);
+      // Start status checking using order ID
+      startStatusChecking(order.id);
       
       return result.data;
     } catch (err) {
@@ -62,21 +62,27 @@ export const usePayMongoPayment = () => {
   }, []);
 
   // Check payment status
-  const checkPaymentStatus = useCallback(async (paymentIntentId: string): Promise<PayMongoPaymentStatus | null> => {
+  const checkPaymentStatus = useCallback(async (orderId: string): Promise<PayMongoPaymentStatus | null> => {
     try {
       setIsCheckingStatus(true);
       
-      const response = await api.payments.getStatus(paymentIntentId);
-      const result: PayMongoPaymentStatusResponse = await response.json();
+      const response = await api.payments.getStatus(orderId);
+      const result = await response.json();
 
       if (!result.success || !result.data) {
         throw new Error(result.message || 'Failed to check payment status');
       }
 
-      // Update payment intent status
-      setPaymentIntent(prev => prev ? { ...prev, status: result.data.status } : null);
+      // Extract payment status from the comprehensive response
+      const paymentStatus = result.data.paymongoStatus?.status || result.data.latestPayment?.status || null;
+      
+      if (paymentStatus && currentOrder.current) {
+        // Update payment intent status
+        setPaymentIntent(prev => prev ? { ...prev, status: paymentStatus } : null);
+        return paymentStatus;
+      }
 
-      return result.data.status;
+      return null;
     } catch (err) {
       console.error('Error checking payment status:', err);
       setError(err instanceof Error ? err.message : 'Failed to check payment status');
@@ -92,8 +98,61 @@ export const usePayMongoPayment = () => {
       setIsCancelling(true);
       setError(null);
 
+      console.log('Attempting to cancel payment:', paymentIntentId);
+
+      // Enhanced error handling with detailed logging
       const response = await api.payments.cancel(paymentIntentId);
-      const result: PayMongoCancelResponse = await response.json();
+      
+      console.log('Cancel payment response status:', response.status);
+      console.log('Cancel payment response ok:', response.ok);
+      console.log('Cancel payment response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // Check if response is ok
+      if (!response.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (textError) {
+          errorText = 'Could not read response text';
+        }
+        
+        console.error('API response error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+          url: `/api/payments/cancel/${paymentIntentId}`
+        });
+        
+        // Provide more specific error messages based on status code
+        let errorMessage = '';
+        switch (response.status) {
+          case 404:
+            errorMessage = 'Cancel payment endpoint not found. Please check if the backend API is running.';
+            break;
+          case 500:
+            errorMessage = 'Internal server error. Please try again later.';
+            break;
+          case 401:
+            errorMessage = 'Authentication required. Please log in again.';
+            break;
+          case 403:
+            errorMessage = 'Permission denied. You may not have access to cancel payments.';
+            break;
+          default:
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      let result: PayMongoCancelResponse;
+      try {
+        result = await response.json();
+        console.log('Cancel payment response:', result);
+      } catch (jsonError) {
+        console.error('Failed to parse JSON response:', jsonError);
+        throw new Error('Invalid response format from server');
+      }
 
       if (!result.success) {
         throw new Error(result.message || 'Failed to cancel payment');
@@ -108,7 +167,23 @@ export const usePayMongoPayment = () => {
       return true;
     } catch (err) {
       console.error('Error cancelling payment:', err);
-      setError(err instanceof Error ? err.message : 'Failed to cancel payment');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to cancel payment';
+      
+      // Check if it's a 404 error (endpoint not found)
+      if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        console.warn('Cancel payment endpoint not found. Implementing local cancellation fallback.');
+        
+        // Local fallback: just update the UI state
+        setPaymentIntent(prev => prev ? { ...prev, status: 'cancelled' } : null);
+        stopStatusChecking();
+        
+        // Show a warning message
+        setError('Payment cancelled locally (backend endpoint not available)');
+        
+        return true; // Return true for local cancellation
+      }
+      
+      setError(errorMessage);
       return false;
     } finally {
       setIsCancelling(false);
@@ -139,7 +214,7 @@ export const usePayMongoPayment = () => {
   }, []);
 
   // Start automatic status checking
-  const startStatusChecking = useCallback((paymentIntentId: string) => {
+  const startStatusChecking = useCallback((orderId: string) => {
     // Clear any existing interval
     if (statusCheckInterval.current) {
       clearInterval(statusCheckInterval.current);
@@ -147,7 +222,7 @@ export const usePayMongoPayment = () => {
 
     // Check status every 3 seconds
     statusCheckInterval.current = setInterval(async () => {
-      const status = await checkPaymentStatus(paymentIntentId);
+      const status = await checkPaymentStatus(orderId);
       
       if (status === 'succeeded' && currentOrder.current) {
         // Payment succeeded, update order

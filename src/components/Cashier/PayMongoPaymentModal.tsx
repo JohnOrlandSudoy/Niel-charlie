@@ -132,11 +132,28 @@ const PayMongoPaymentModal: React.FC<PayMongoPaymentModalProps> = React.memo(({
 
         <div className="p-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className={`border rounded-lg p-4 mb-6 ${
+              error.includes('cancelled locally') 
+                ? 'bg-yellow-50 border-yellow-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
               <div className="flex items-center space-x-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                <span className="text-red-800">{error}</span>
+                <AlertTriangle className={`h-5 w-5 ${
+                  error.includes('cancelled locally') 
+                    ? 'text-yellow-600' 
+                    : 'text-red-600'
+                }`} />
+                <span className={
+                  error.includes('cancelled locally') 
+                    ? 'text-yellow-800' 
+                    : 'text-red-800'
+                }>{error}</span>
               </div>
+              {error.includes('cancelled locally') && (
+                <p className="text-sm text-yellow-700 mt-2">
+                  The payment has been cancelled in the interface, but the backend endpoint may not be available yet.
+                </p>
+              )}
             </div>
           )}
 

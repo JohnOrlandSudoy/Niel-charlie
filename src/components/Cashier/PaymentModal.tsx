@@ -3,6 +3,7 @@ import { X, Save, Smartphone, CreditCard, QrCode } from 'lucide-react';
 import { Order as ApiOrder } from '../../types/orders';
 import { Discount } from '../../types/discounts';
 import DiscountSelector from './DiscountSelector';
+import { usePaymentMethods } from '../../hooks/usePaymentMethods';
 
 interface PaymentModalProps {
   order: ApiOrder;
@@ -31,6 +32,8 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
   onPayMongoPayment
 }) => {
   const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
+  const { paymentMethods, loading: loadingPaymentMethods, error: paymentMethodsError } = usePaymentMethods();
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const paymentData = {
@@ -154,18 +157,36 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
                   <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="payment-method">
                     Payment Method
                   </label>
-                  <select
-                    id="payment-method"
-                    value={paymentForm.payment_method}
-                    onChange={(e) => handleInputChange('payment_method', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    aria-label="Payment method"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="gcash">GCash</option>
-                    <option value="card">Card</option>
-                    <option value="paymongo">PayMongo (Online)</option>
-                  </select>
+                  {loadingPaymentMethods ? (
+                    <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      <span className="text-gray-600">Loading payment methods...</span>
+                    </div>
+                  ) : paymentMethodsError ? (
+                    <div className="w-full border border-red-300 rounded-lg px-3 py-2 bg-red-50 text-red-600">
+                      Error loading payment methods
+                    </div>
+                  ) : (
+                    <select
+                      id="payment-method"
+                      value={paymentForm.payment_method}
+                      onChange={(e) => handleInputChange('payment_method', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      aria-label="Payment method"
+                    >
+                      {paymentMethods.length === 0 ? (
+                        <option value="" disabled>No payment methods available</option>
+                      ) : (
+                        paymentMethods
+                          .sort((a, b) => a.display_order - b.display_order)
+                          .map((method) => (
+                            <option key={method.method_key} value={method.method_key}>
+                              {method.method_name}
+                            </option>
+                          ))
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>
@@ -201,6 +222,7 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
                 </div>
               </div>
             )}
+
 
             {/* Payment Method Info */}
             {paymentForm.payment_method === 'paymongo' && (

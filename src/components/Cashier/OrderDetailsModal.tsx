@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { X, Edit, Trash2 } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { X, Edit, Trash2, Clock, ChefHat, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { Order as ApiOrder, OrderItem, UpdateOrderItemRequest } from '../../types/orders';
+import { MenuItem, MenuItemIngredient } from '../../types/menu';
+import { api } from '../../utils/api';
+import { storageHelpers } from '../../lib/supabase';
 
 interface OrderDetailsModalProps {
   order: ApiOrder;
@@ -28,6 +31,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
   onDeleteItem
 }) => {
   const [editForm, setEditForm] = useState<UpdateOrderItemRequest>({});
+  const [menuItemDetails, setMenuItemDetails] = useState<{ [key: string]: MenuItem }>({});
+  const [menuItemIngredients, setMenuItemIngredients] = useState<{ [key: string]: MenuItemIngredient[] }>({});
+  const [loadingMenuItems, setLoadingMenuItems] = useState<{ [key: string]: boolean }>({});
 
   const handleEditSubmit = useCallback((item: OrderItem) => {
     onUpdateItem(item.id, editForm);
@@ -43,6 +49,51 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
     setEditForm({});
   }, [onEditItem]);
 
+  // Fetch detailed menu item information
+  const fetchMenuItemDetails = useCallback(async (menuItemId: string) => {
+    if (menuItemDetails[menuItemId] || loadingMenuItems[menuItemId]) {
+      return; // Already loaded or loading
+    }
+
+    try {
+      setLoadingMenuItems(prev => ({ ...prev, [menuItemId]: true }));
+      
+      // Fetch menu item details
+      const menuResponse = await api.menus.getById(menuItemId);
+      const menuResult = await menuResponse.json();
+      
+      if (menuResult.success && menuResult.data) {
+        setMenuItemDetails(prev => ({ ...prev, [menuItemId]: menuResult.data }));
+        
+        // Fetch ingredients for this menu item
+        try {
+          const ingredientsResponse = await api.inventory.getMenuItemIngredients(menuItemId);
+          const ingredientsResult = await ingredientsResponse.json();
+          
+          if (ingredientsResult.success && ingredientsResult.data) {
+            setMenuItemIngredients(prev => ({ ...prev, [menuItemId]: ingredientsResult.data }));
+          }
+        } catch (ingredientErr) {
+          console.warn(`Failed to fetch ingredients for menu item ${menuItemId}:`, ingredientErr);
+        }
+      }
+    } catch (err) {
+      console.error(`Error fetching menu item details for ${menuItemId}:`, err);
+    } finally {
+      setLoadingMenuItems(prev => ({ ...prev, [menuItemId]: false }));
+    }
+  }, [menuItemDetails, loadingMenuItems]);
+
+  // Get image URL for menu item
+  const getMenuItemImageUrl = useCallback((menuItem: MenuItem) => {
+    if (menuItem.image_url) {
+      return menuItem.image_url;
+    } else if (menuItem.image_filename) {
+      return storageHelpers.getPublicUrl('menu-item-images', menuItem.image_filename);
+    }
+    return null;
+  }, []);
+
   const handleStartEdit = useCallback((item: OrderItem) => {
     onEditItem(item);
     setEditForm({
@@ -51,6 +102,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
       special_instructions: item.special_instructions || ''
     });
   }, [onEditItem]);
+
+  // Fetch menu item details when order items change
+  useEffect(() => {
+    orderItems.forEach(item => {
+      if (item.menu_item_id && !menuItemDetails[item.menu_item_id]) {
+        fetchMenuItemDetails(item.menu_item_id);
+      }
+    });
+  }, [orderItems, menuItemDetails, fetchMenuItemDetails]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -215,22 +275,122 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                         </div>
                       </div>
                     ) : (
-                      // Display Mode
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-gray-900">{item.menu_item?.name}</h4>
-                            <span className="text-sm font-medium text-gray-900">₱{item.total_price.toFixed(2)}</span>
+                      // Enhanced Display Mode with Menu Item Details
+                      <div className="space-y-3">
+                        <div className="flex items-start space-x-4">
+                          {/* Menu Item Image */}
+                          <div className="flex-shrink-0">
+                            {(() => {
+                              const menuItem = menuItemDetails[item.menu_item_id];
+                              const imageUrl = menuItem ? getMenuItemImageUrl(menuItem) : null;
+                              
+                              if (loadingMenuItems[item.menu_item_id]) {
+                                return (
+                                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                  </div>
+                                );
+                              }
+                              
+                              if (imageUrl) {
+                                return (
+                                  <img
+                                    src={imageUrl}
+                                    alt={item.menu_item?.name || 'Menu item'}
+                                    className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                );
+                              }
+                              
+                              return (
+                                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                                  <ImageIcon className="h-6 w-6 text-gray-400" />
+                                </div>
+                              );
+                            })()}
                           </div>
                           
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <div>Quantity: {item.quantity} × ₱{item.unit_price.toFixed(2)}</div>
-                            {item.customizations && (
-                              <div>Customizations: {item.customizations}</div>
-                            )}
-                            {item.special_instructions && (
-                              <div>Instructions: {item.special_instructions}</div>
-                            )}
+                          {/* Menu Item Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-medium text-gray-900">{item.menu_item?.name}</h4>
+                                {(() => {
+                                  const menuItem = menuItemDetails[item.menu_item_id];
+                                  return menuItem && (
+                                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                      {menuItem.description}
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                              <span className="text-sm font-medium text-gray-900 ml-2">₱{item.total_price.toFixed(2)}</span>
+                            </div>
+                            
+                            {/* Menu Item Info */}
+                            {(() => {
+                              const menuItem = menuItemDetails[item.menu_item_id];
+                              return menuItem && (
+                                <div className="flex items-center space-x-4 text-xs text-gray-500 mb-2">
+                                  <div className="flex items-center space-x-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{menuItem.prep_time}m prep</span>
+                                  </div>
+                                  {menuItem.calories > 0 && (
+                                    <div className="flex items-center space-x-1">
+                                      <ChefHat className="h-3 w-3" />
+                                      <span>{menuItem.calories} cal</span>
+                                    </div>
+                                  )}
+                                  {menuItem.allergens && menuItem.allergens.length > 0 && (
+                                    <div className="flex items-center space-x-1">
+                                      <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                      <span>Allergens: {menuItem.allergens.join(', ')}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                            
+                            {/* Order Item Details */}
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div>Quantity: {item.quantity} × ₱{item.unit_price.toFixed(2)}</div>
+                              {item.customizations && (
+                                <div className="text-blue-600">Customizations: {item.customizations}</div>
+                              )}
+                              {item.special_instructions && (
+                                <div className="text-amber-600">Instructions: {item.special_instructions}</div>
+                              )}
+                            </div>
+                            
+                            {/* Ingredients */}
+                            {(() => {
+                              const ingredients = menuItemIngredients[item.menu_item_id];
+                              return ingredients && ingredients.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <p className="text-xs font-medium text-gray-600 mb-2">Ingredients:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {ingredients.map((ingredient, index) => (
+                                      <span
+                                        key={index}
+                                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full border"
+                                      >
+                                        {ingredient.ingredient?.name || 'Unknown'}
+                                        {ingredient.quantity_required > 0 && (
+                                          <span className="ml-1 text-gray-500">
+                                            ({ingredient.quantity_required} {ingredient.unit})
+                                          </span>
+                                        )}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                         

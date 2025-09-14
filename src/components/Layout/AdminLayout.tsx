@@ -7,6 +7,7 @@ import MenuManagement from '../Menu/MenuManagement';
 import CategoryManagement from '../Menu/CategoryManagement';
 import DiscountManagement from '../Discounts/DiscountManagement';
 import OrderHistory from '../Orders/OrderHistory';
+import PayMongoPaymentManagement from '../PayMongo/PayMongoPaymentManagement';
 import Settings from '../Settings/Settings';
 
 const AdminLayout: React.FC = () => {
@@ -32,6 +33,8 @@ const AdminLayout: React.FC = () => {
         return <DiscountManagement />;
       case 'orders':
         return <OrderHistory />;
+      case 'paymongo':
+        return <PayMongoPaymentManagement />;
       case 'settings':
         return <Settings />;
       default:

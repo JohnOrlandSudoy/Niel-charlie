@@ -5,15 +5,12 @@ import {
   Clock, 
   CheckCircle, 
   AlertTriangle, 
-  Utensils, 
   Thermometer,
   Timer,
   Package,
   Bell,
   Eye,
   X,
-  Plus,
-  Minus,
   AlertCircle,
   Loader2,
   History
@@ -21,37 +18,12 @@ import {
 import { api } from '../../utils/api';
 import { 
   KitchenOrder, 
-  KitchenOrderItem, 
-  OrderStatusUpdate, 
   OrderStatusHistory, 
   KitchenStats, 
   ApiResponse 
 } from '../../types/kitchen';
 
-interface OrderItem {
-  name: string;
-  quantity: number;
-  prepTime: number;
-  status: 'pending' | 'preparing' | 'ready';
-  specialInstructions?: string;
-  ingredients: string[];
-  customizations?: string[];
-  addOns?: string[];
-}
 
-interface Order {
-  id: string;
-  customer: string;
-  items: OrderItem[];
-  total: number;
-  orderTime: string;
-  priority: 'high' | 'medium' | 'low';
-  status: 'pending' | 'preparing' | 'ready' | 'completed';
-  specialInstructions?: string;
-  orderNumber?: string;
-  orderType?: 'dine-in' | 'takeout';
-  tableNumber?: number | null;
-}
 
 interface Ingredient {
   name: string;
@@ -150,8 +122,28 @@ const KitchenDashboard: React.FC = () => {
       if (result.success && result.data) {
         console.log('Kitchen orders fetched:', result.data);
         console.log('First order structure:', result.data[0]);
-        setOrders(result.data);
-        calculateKitchenStats(result.data);
+        
+        // Check if orders have items included
+        const ordersWithItems = result.data.filter(order => order.order_items && order.order_items.length > 0);
+        const ordersWithoutItems = result.data.filter(order => !order.order_items || order.order_items.length === 0);
+        
+        console.log(`📊 Orders with items: ${ordersWithItems.length}`);
+        console.log(`⚠️ Orders without items: ${ordersWithoutItems.length}`);
+        
+        if (ordersWithoutItems.length > 0) {
+          console.warn('⚠️ Some orders are missing items. Check backend kitchen orders endpoint configuration.');
+        }
+        
+        // Process orders with the new structure
+        const processedOrders = result.data.map((order) => {
+          if (!order.order_items || order.order_items.length === 0) {
+            console.warn(`⚠️ Order ${order.id} has no items - check backend kitchen orders endpoint`);
+          }
+          return order;
+        });
+        
+        setOrders(processedOrders);
+        calculateKitchenStats(processedOrders);
       } else {
         console.error('Failed to fetch kitchen orders:', result);
         setError(result.message || 'Failed to fetch kitchen orders');
@@ -235,90 +227,6 @@ const KitchenDashboard: React.FC = () => {
     }
   };
 
-  // Remove mock orders - using API data instead
-  const mockOrders: Order[] = [
-    { 
-      id: 'ORD-12354', 
-      customer: 'Maria Santos', 
-      items: [
-        { 
-          name: 'Chicken Pastil', 
-          quantity: 2, 
-          prepTime: 20, 
-          status: 'preparing',
-          specialInstructions: 'Extra spicy, no onions',
-          ingredients: ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'],
-          customizations: ['Extra Spicy', 'No Onions'],
-          addOns: ['Extra Chicken']
-        },
-        { 
-          name: 'Iced Tea', 
-          quantity: 1, 
-          prepTime: 5, 
-          status: 'ready',
-          ingredients: ['tea leaves', 'sugar', 'ice'],
-          customizations: ['Less Sweet'],
-          addOns: []
-        }
-      ], 
-      total: 489.5, 
-      orderTime: '2 min ago',
-      priority: 'high',
-      status: 'preparing',
-      specialInstructions: 'Customer allergic to onions - URGENT',
-      orderNumber: 'ORD-2024-001',
-      orderType: 'takeout',
-      tableNumber: null
-    },
-    { 
-      id: 'ORD-12355', 
-      customer: 'Juan Dela Cruz', 
-      items: [
-        { 
-          name: 'Pork Adobo', 
-          quantity: 1, 
-          prepTime: 35, 
-          status: 'preparing',
-          ingredients: ['pork', 'soy sauce', 'vinegar', 'garlic', 'pepper']
-        },
-        { 
-          name: 'Rice', 
-          quantity: 2, 
-          prepTime: 10, 
-          status: 'ready',
-          ingredients: ['rice', 'water']
-        }
-      ], 
-      total: 320, 
-      orderTime: '5 min ago',
-      priority: 'medium',
-      status: 'preparing'
-    },
-    { 
-      id: 'ORD-12356', 
-      customer: 'Ana Reyes', 
-      items: [
-        { 
-          name: 'Beef Steak', 
-          quantity: 1, 
-          prepTime: 25, 
-          status: 'pending',
-          ingredients: ['beef', 'garlic', 'soy sauce', 'pepper']
-        },
-        { 
-          name: 'Garlic Rice', 
-          quantity: 1, 
-          prepTime: 10, 
-          status: 'pending',
-          ingredients: ['rice', 'garlic', 'oil']
-        }
-      ], 
-      total: 345, 
-      orderTime: '8 min ago',
-      priority: 'low',
-      status: 'pending'
-    }
-  ];
 
   useEffect(() => {
     fetchKitchenOrders();
@@ -332,6 +240,7 @@ const KitchenDashboard: React.FC = () => {
     
     return () => clearInterval(interval);
   }, []);
+
 
   // Add notification
   const addNotification = (message: string) => {
@@ -408,32 +317,10 @@ const KitchenDashboard: React.FC = () => {
     await updateOrderStatus(orderId, 'completed', 'Order completed by kitchen staff');
   };
 
-  const canPrepareItem = (item: KitchenOrderItem): boolean => {
-    // Check if we have ingredient requirements for this menu item
-    // For now, we'll do a basic check based on common ingredients
-    // This would be enhanced when the API includes ingredient requirements
-    
-    if (!item.menu_item?.name) return false;
-    
-    const itemName = item.menu_item.name.toLowerCase();
-    
-    // Basic ingredient mapping for common dishes
-    const ingredientMap: { [key: string]: string[] } = {
-      'chicken pastil': ['chicken', 'rice', 'pepper', 'soy sauce', 'garlic'],
-      'pork adobo': ['pork', 'rice', 'garlic', 'soy sauce', 'vinegar'],
-      'beef tapa': ['beef', 'rice', 'garlic', 'soy sauce', 'vinegar'],
-      'iced tea': ['tea leaves', 'sugar', 'ice'],
-      'calamansi juice': ['calamansi', 'sugar', 'water', 'ice']
-    };
-    
-    // Find matching ingredients for this item
-    const requiredIngredients = ingredientMap[itemName] || [];
-    
-    // Check if all required ingredients are available
-    return requiredIngredients.every(ingredientName => {
-      const ingredient = ingredients.find(ing => ing.name === ingredientName);
-      return ingredient && ingredient.status !== 'out';
-    });
+
+  const canPrepareItem = (order: KitchenOrder): boolean => {
+    // Use the kitchen_metadata to determine if order can be prepared
+    return order.kitchen_metadata?.can_prepare ?? false;
   };
 
   const getFilteredOrders = (status: string) => {
@@ -444,6 +331,7 @@ const KitchenDashboard: React.FC = () => {
     setSelectedOrder(order);
     setShowOrderModal(true);
   };
+
 
   // Fetch order status history
   const fetchOrderHistory = async (orderId: string) => {
@@ -628,7 +516,6 @@ const KitchenDashboard: React.FC = () => {
                         onComplete={markOrderComplete}
                         onViewDetails={openOrderModal}
                         canPrepare={canPrepareItem}
-                        ingredients={ingredients}
                       />
                     ))}
                   </div>
@@ -649,7 +536,6 @@ const KitchenDashboard: React.FC = () => {
                         onComplete={markOrderComplete}
                         onViewDetails={openOrderModal}
                         canPrepare={canPrepareItem}
-                        ingredients={ingredients}
                       />
                     ))}
                   </div>
@@ -670,7 +556,6 @@ const KitchenDashboard: React.FC = () => {
                         onComplete={markOrderComplete}
                         onViewDetails={openOrderModal}
                         canPrepare={canPrepareItem}
-                        ingredients={ingredients}
                       />
                     ))}
                   </div>
@@ -762,10 +647,22 @@ const KitchenDashboard: React.FC = () => {
              <p className="text-sm text-gray-500">Equipment or ingredient problem</p>
            </button>
 
-           <button className="p-4 border-2 border-dashed border-purple-200 hover:border-purple-300 hover:bg-purple-50 rounded-lg transition-all duration-200 text-center">
+           <button 
+             onClick={async () => {
+               console.log('🔄 Refreshing all order items...');
+               try {
+                 // Fetch fresh orders with items
+                 await fetchKitchenOrders();
+                 console.log('✅ All order items refreshed');
+               } catch (err) {
+                 console.error('❌ Error refreshing order items:', err);
+               }
+             }}
+             className="p-4 border-2 border-dashed border-purple-200 hover:border-purple-300 hover:bg-purple-50 rounded-lg transition-all duration-200 text-center"
+           >
              <Bell className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-             <p className="font-medium text-gray-900">Notify Cashier</p>
-             <p className="text-sm text-gray-500">Order ready notification</p>
+             <p className="font-medium text-gray-900">Refresh Items</p>
+             <p className="text-sm text-gray-500">Reload all order items</p>
            </button>
          </div>
          
@@ -787,6 +684,60 @@ const KitchenDashboard: React.FC = () => {
                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 border border-blue-300 rounded hover:bg-blue-200"
              >
                Test Status Update
+             </button>
+               <button
+                 onClick={async () => {
+                   console.log('🔍 === KITCHEN DEBUG START ===');
+                   console.log('📊 Current orders count:', orders.length);
+                   
+                   if (orders.length > 0) {
+                     orders.forEach((order, index) => {
+                       console.log(`📋 Order ${index + 1}:`, {
+                         id: order.id,
+                         order_number: order.order_number,
+                         items_count: order.order_items?.length || 0,
+                         items: order.order_items,
+                         has_items: !!order.order_items && order.order_items.length > 0
+                       });
+                     });
+                   }
+                   
+                   // Test the kitchen orders endpoint
+                   try {
+                     console.log('🍳 Testing kitchen orders endpoint...');
+                     const kitchenResponse = await api.orders.getKitchenOrders();
+                     const kitchenResult = await kitchenResponse.json();
+                     console.log('🍳 Kitchen orders result:', kitchenResult);
+                     
+                     if (kitchenResult.success && kitchenResult.data) {
+                       console.log('✅ Kitchen orders endpoint working');
+                       console.log('📦 Sample order structure:', kitchenResult.data[0]);
+                     } else {
+                       console.error('❌ Kitchen orders endpoint failed:', kitchenResult);
+                     }
+                   } catch (err) {
+                     console.error('❌ Error testing kitchen orders endpoint:', err);
+                   }
+                   
+                   console.log('🔍 === KITCHEN DEBUG END ===');
+                 }}
+                 className="px-3 py-1 text-xs font-medium text-purple-600 bg-purple-100 border border-purple-300 rounded hover:bg-purple-200"
+               >
+                 Debug Kitchen Orders
+               </button>
+             <button
+               onClick={() => {
+                 console.log('🔍 Current orders state:', orders);
+                 console.log('🔍 Orders with items:', orders.map(order => ({
+                   id: order.id,
+                   order_number: order.order_number,
+                   itemsCount: order.order_items?.length || 0,
+                   items: order.order_items
+                 })));
+               }}
+               className="px-3 py-1 text-xs font-medium text-orange-600 bg-orange-100 border border-orange-300 rounded hover:bg-orange-200"
+             >
+               Debug Orders State
              </button>
              <button
                onClick={async () => {
@@ -855,18 +806,17 @@ const KitchenDashboard: React.FC = () => {
          </div>
        </div>
 
-      {/* Order Detail Modal */}
-      {showOrderModal && selectedOrder && (
-        <OrderDetailModal 
-          order={selectedOrder}
-          onClose={() => setShowOrderModal(false)}
-          onStatusUpdate={updateOrderStatus}
-          onComplete={markOrderComplete}
-          canPrepare={canPrepareItem}
-          ingredients={ingredients}
-          onViewHistory={fetchOrderHistory}
-        />
-      )}
+       {/* Order Detail Modal */}
+       {showOrderModal && selectedOrder && (
+         <OrderDetailModal 
+           order={selectedOrder}
+           onClose={() => setShowOrderModal(false)}
+           onStatusUpdate={updateOrderStatus}
+           onComplete={markOrderComplete}
+           canPrepare={canPrepareItem}
+           onViewHistory={fetchOrderHistory}
+         />
+       )}
 
       {/* Order History Modal */}
       {showHistoryModal && (
@@ -889,8 +839,7 @@ interface OrderCardProps {
   onStatusUpdate: (orderId: string, status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => void;
   onComplete: (orderId: string) => void;
   onViewDetails: (order: KitchenOrder) => void;
-  canPrepare: (item: KitchenOrderItem) => boolean;
-  ingredients: Ingredient[];
+  canPrepare: (order: KitchenOrder) => boolean;
 }
 
 const OrderCard: React.FC<OrderCardProps> = ({ 
@@ -898,16 +847,15 @@ const OrderCard: React.FC<OrderCardProps> = ({
   onStatusUpdate, 
   onComplete, 
   onViewDetails,
-  canPrepare,
-  ingredients
+  canPrepare
 }) => {
   return (
-    <div className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getPriorityColor(order.priority)}`}>
+    <div className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getPriorityColor(order.kitchen_metadata?.priority?.toLowerCase() || 'medium')}`}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
           <span className="font-medium text-gray-900">{order.order_number}</span>
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(order.priority || 'medium')}`}>
-            {(order.priority || 'medium').toUpperCase()} PRIORITY
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(order.kitchen_metadata?.priority?.toLowerCase() || 'medium')}`}>
+            {(order.kitchen_metadata?.priority || 'MEDIUM').toUpperCase()} PRIORITY
           </span>
         </div>
         <div className="text-right">
@@ -917,6 +865,9 @@ const OrderCard: React.FC<OrderCardProps> = ({
       </div>
 
       <p className="text-sm text-gray-600 mb-3">{order.customer_name || 'Walk-in Customer'}</p>
+      {order.table_number && (
+        <p className="text-xs text-gray-500 mb-2">Table: {order.table_number}</p>
+      )}
       
       {order.special_instructions && (
         <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
@@ -924,37 +875,150 @@ const OrderCard: React.FC<OrderCardProps> = ({
         </div>
       )}
       
-      <div className="space-y-2 mb-4">
-        {order.items && order.items.length > 0 ? (
-          order.items.map((item, index) => {
-          const canPrepareItem = canPrepare(item);
-          return (
-            <div key={index} className="flex items-center justify-between p-3 bg-white bg-opacity-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                {getStatusIcon(item.status)}
-                <div>
-                    <p className="font-medium text-gray-900">{item.menu_item?.name || 'Unknown Item'}</p>
-                  <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                    {item.special_instructions && (
-                      <p className="text-xs text-blue-600">💡 {item.special_instructions}</p>
-                  )}
+      {/* Kitchen Metadata Summary */}
+      {order.kitchen_metadata && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Timer className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">
+                Est. Prep Time: {order.kitchen_metadata.estimated_total_prep_time}m
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Package className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">
+                {order.kitchen_metadata.total_items} item{order.kitchen_metadata.total_items !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          
+          {/* Stock Status */}
+          {order.kitchen_metadata.has_out_of_stock && (
+            <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-xs text-red-800">
+              ⚠️ <strong>Cannot prepare:</strong> Missing ingredients ({order.kitchen_metadata.low_stock_ingredients.length} out of stock)
+            </div>
+          )}
+          {order.kitchen_metadata.has_low_stock && !order.kitchen_metadata.has_out_of_stock && (
+            <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-xs text-amber-800">
+              ⚡ <strong>Low stock warning:</strong> Some ingredients running low
+            </div>
+          )}
+          {!order.kitchen_metadata.has_low_stock && !order.kitchen_metadata.has_out_of_stock && (
+            <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-xs text-green-800">
+              ✅ <strong>Ready to prepare:</strong> All ingredients available
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-3 mb-4">
+        {order.order_items && order.order_items.length > 0 ? (
+          order.order_items.map((item, index) => {
+            
+            return (
+              <div key={index} className="p-3 bg-white bg-opacity-50 rounded-lg border">
+                <div className="flex items-start space-x-3">
+                  {/* Menu Item Image Placeholder */}
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                      <ChefHat className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                  
+                  {/* Menu Item Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{item.menu_items.name}</h4>
+                        <p className="text-xs text-gray-600 mt-1 line-clamp-1">
+                          {item.menu_items.description}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">₱{item.total_price?.toFixed(2) || '0.00'}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Menu Item Info */}
+                    <div className="flex items-center space-x-3 text-xs text-gray-500 mb-2">
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3" />
+                        <span>{item.menu_items.prep_time}m prep</span>
+                      </div>
+                      {item.menu_items.calories > 0 && (
+                        <div className="flex items-center space-x-1">
+                          <ChefHat className="h-3 w-3" />
+                          <span>{item.menu_items.calories} cal</span>
+                        </div>
+                      )}
+                      {item.menu_items.allergens && item.menu_items.allergens.length > 0 && (
+                        <div className="flex items-center space-x-1">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                          <span>Allergens: {item.menu_items.allergens.join(', ')}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Order Item Details */}
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div>Quantity: {item.quantity} × ₱{item.unit_price?.toFixed(2) || '0.00'}</div>
+                      {item.customizations && (
+                        <div className="text-blue-600">Customizations: {item.customizations}</div>
+                      )}
+                      {item.special_instructions && (
+                        <div className="text-amber-600">Instructions: {item.special_instructions}</div>
+                      )}
+                    </div>
+                    
+                    {/* Ingredients from menu_item_ingredients */}
+                    {item.menu_items.menu_item_ingredients && item.menu_items.menu_item_ingredients.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs font-medium text-gray-600 mb-1">Required Ingredients:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {item.menu_items.menu_item_ingredients.map((ingredient, ingIndex) => {
+                            const isOutOfStock = ingredient.ingredients.current_stock <= 0;
+                            const isLowStock = ingredient.ingredients.current_stock <= ingredient.ingredients.min_stock_threshold;
+                            
+                            return (
+                              <span
+                                key={ingIndex}
+                                className={`px-2 py-1 text-xs rounded-full ${
+                                  isOutOfStock 
+                                    ? 'bg-red-100 text-red-700 border border-red-200' 
+                                    : isLowStock
+                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                    : 'bg-green-100 text-green-700 border border-green-200'
+                                }`}
+                              >
+                                {ingredient.ingredients.name}
+                                <span className="ml-1 text-gray-500">
+                                  ({ingredient.quantity_required} {ingredient.unit})
+                                </span>
+                                {ingredient.ingredients.storage_location && (
+                                  <span className="ml-1 text-gray-400">
+                                    @{ingredient.ingredients.storage_location}
+                                  </span>
+                                )}
+                                {isOutOfStock && ' ⚠️'}
+                                {isLowStock && !isOutOfStock && ' ⚡'}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
-                  {item.status}
-                </span>
-                  <p className="text-xs text-gray-500 mt-1">Est: {item.menu_item?.prep_time || 0}m</p>
-                {!canPrepareItem && (
-                  <p className="text-xs text-red-600 mt-1">⚠️ Missing ingredients</p>
-                )}
-              </div>
-            </div>
-          );
+            );
           })
         ) : (
           <div className="text-center py-4 text-gray-500">
             <p className="text-sm">No items found for this order</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {order.special_instructions ? 'Order has special instructions only' : 'This order appears to be empty'}
+            </p>
           </div>
         )}
       </div>
@@ -1007,8 +1071,7 @@ interface OrderDetailModalProps {
   onClose: () => void;
   onStatusUpdate: (orderId: string, status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => void;
   onComplete: (orderId: string) => void;
-  canPrepare: (item: KitchenOrderItem) => boolean;
-  ingredients: Ingredient[];
+  canPrepare: (order: KitchenOrder) => boolean;
   onViewHistory: (orderId: string) => void;
 }
 
@@ -1018,7 +1081,6 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onStatusUpdate, 
   onComplete,
   canPrepare,
-  ingredients,
   onViewHistory
 }) => {
   return (
@@ -1047,20 +1109,21 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
             <div className="space-y-3">
               <h3 className="font-medium text-gray-900">Order Items</h3>
-              {order.items && order.items.length > 0 ? (
-                order.items.map((item, index) => {
-                const canPrepareItem = canPrepare(item);
+              {order.order_items && order.order_items.length > 0 ? (
+                order.order_items.map((item, index) => {
+                const canPrepareOrder = canPrepare(order);
                 return (
                   <div key={index} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                          <h4 className="font-medium text-gray-900">{item.menu_item?.name || 'Unknown Item'}</h4>
+                          <h4 className="font-medium text-gray-900">{item.menu_items.name}</h4>
                         <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                          <p className="text-sm text-gray-500">Prep Time: {item.menu_item?.prep_time || 0} minutes</p>
+                          <p className="text-sm text-gray-500">Prep Time: {item.menu_items.prep_time} minutes</p>
+                          <p className="text-sm text-gray-500">Calories: {item.menu_items.calories}</p>
                       </div>
-                      <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">₱{item.total_price?.toFixed(2) || '0.00'}</p>
+                      </div>
                     </div>
 
                       {item.special_instructions && (
@@ -1071,9 +1134,46 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       </div>
                     )}
 
-                      {/* Ingredients section removed - would need API integration for ingredient requirements */}
+                      {/* Ingredients Section */}
+                      {item.menu_items.menu_item_ingredients && item.menu_items.menu_item_ingredients.length > 0 && (
+                        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Required Ingredients:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {item.menu_items.menu_item_ingredients.map((ingredient, ingIndex) => {
+                              const isOutOfStock = ingredient.ingredients.current_stock <= 0;
+                              const isLowStock = ingredient.ingredients.current_stock <= ingredient.ingredients.min_stock_threshold;
+                              
+                              return (
+                                <span
+                                  key={ingIndex}
+                                  className={`px-3 py-1 text-sm rounded-full ${
+                                    isOutOfStock 
+                                      ? 'bg-red-100 text-red-700 border border-red-200' 
+                                      : isLowStock
+                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                      : 'bg-green-100 text-green-700 border border-green-200'
+                                  }`}
+                                >
+                                  {ingredient.ingredients.name}
+                                  <span className="ml-1 text-gray-500">
+                                    ({ingredient.quantity_required} {ingredient.unit})
+                                  </span>
+                                  {ingredient.ingredients.storage_location && (
+                                    <span className="ml-1 text-gray-400">
+                                      @{ingredient.ingredients.storage_location}
+                                    </span>
+                                  )}
+                                  {isOutOfStock && ' ⚠️ Out of Stock'}
+                                  {isLowStock && !isOutOfStock && ' ⚡ Low Stock'}
+                                  {!isLowStock && !isOutOfStock && ' ✅ Available'}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
-                    {!canPrepareItem && (
+                    {!canPrepareOrder && (
                       <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
                         <p className="text-sm text-red-700">
                           ⚠️ Cannot prepare this item due to missing ingredients
@@ -1083,10 +1183,10 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
                     <div className="flex space-x-2">
                       <button
-                          onClick={() => onStatusUpdate(order.id, 'preparing', `Started preparing ${item.menu_item?.name}`)}
-                          disabled={order.status === 'preparing' || !canPrepareItem}
+                          onClick={() => onStatusUpdate(order.id, 'preparing', `Started preparing ${item.menu_items.name}`)}
+                          disabled={order.status === 'preparing' || !canPrepareOrder}
                         className={`px-3 py-1 text-xs font-medium rounded border ${
-                            order.status === 'preparing' || !canPrepareItem
+                            order.status === 'preparing' || !canPrepareOrder
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                             : 'text-blue-600 hover:text-blue-700 border-blue-300 hover:bg-blue-50'
                         }`}
@@ -1184,7 +1284,7 @@ const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
             </div>
           ) : orderHistory.length > 0 ? (
             <div className="space-y-4">
-              {orderHistory.map((history, index) => (
+              {orderHistory.map((history) => (
                 <div key={history.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(history.status)}`}>

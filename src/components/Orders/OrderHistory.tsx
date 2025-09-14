@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Order as ApiOrder, OrderStats, PaginatedOrderResponse } from '../../types/orders';
 
@@ -54,11 +54,14 @@ const OrderHistory: React.FC = () => {
       const result: PaginatedOrderResponse = await response.json();
       
       if (result.success && result.data) {
-        setOrders(result.data);
+        // Check if orders have items and enhance them if needed
+        const enhancedOrders = await enhanceOrdersWithItems(result.data);
+        
+        setOrders(enhancedOrders);
         setCurrentPage(result.pagination.page);
         setTotalPages(result.pagination.totalPages);
         setTotalItems(result.pagination.total);
-        console.log('Orders fetched:', result.data);
+        console.log('Orders fetched:', enhancedOrders);
         console.log('Pagination info:', result.pagination);
       } else {
         setError(result.message || 'Failed to fetch orders');
@@ -68,6 +71,56 @@ const OrderHistory: React.FC = () => {
       setError('Failed to fetch orders. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Enhance orders with items if they're missing
+  const enhanceOrdersWithItems = async (orders: ApiOrder[]): Promise<ApiOrder[]> => {
+    try {
+      // Check which orders are missing items
+      const ordersWithoutItems = orders.filter(order => 
+        (!order.order_items || order.order_items.length === 0) && 
+        (!order.items || order.items.length === 0)
+      );
+
+      if (ordersWithoutItems.length === 0) {
+        console.log('✅ All orders have items');
+        return orders;
+      }
+
+      console.log(`⚠️ Found ${ordersWithoutItems.length} orders without items, attempting to fetch...`);
+
+      // Try to fetch detailed orders with items using the kitchen endpoint
+      try {
+        const kitchenResponse = await api.orders.getKitchenOrders();
+        const kitchenResult = await kitchenResponse.json();
+        
+        if (kitchenResult.success && kitchenResult.data) {
+          console.log('✅ Successfully fetched detailed orders from kitchen endpoint');
+          
+          // Merge kitchen orders data with current orders
+          const enhancedOrders = orders.map(order => {
+            const kitchenOrder = kitchenResult.data.find((ko: any) => ko.id === order.id);
+            if (kitchenOrder && kitchenOrder.order_items) {
+              return {
+                ...order,
+                order_items: kitchenOrder.order_items,
+                items: kitchenOrder.order_items // Also set items for backward compatibility
+              };
+            }
+            return order;
+          });
+          
+          return enhancedOrders;
+        }
+      } catch (kitchenError) {
+        console.warn('⚠️ Could not fetch kitchen orders:', kitchenError);
+      }
+
+      return orders;
+    } catch (error) {
+      console.error('Error enhancing orders with items:', error);
+      return orders;
     }
   };
 
@@ -263,6 +316,314 @@ const OrderHistory: React.FC = () => {
     }
   };
 
+  // Handle print order
+  const handlePrintOrder = (order: ApiOrder) => {
+    try {
+      console.log('🖨️ Printing order:', order.order_number, 'Status:', order.status);
+      console.log('📦 Order items data:', {
+        hasOrderItems: !!order.order_items,
+        hasItems: !!order.items,
+        orderItemsCount: order.order_items?.length || 0,
+        itemsCount: order.items?.length || 0,
+        orderItems: order.order_items,
+        items: order.items
+      });
+
+      // Generate HTML content for printing
+      const printContent = generatePrintHTML(order);
+      
+      if (!printContent) {
+        console.error('❌ Failed to generate print content');
+        alert('Failed to generate print content. Please try again.');
+        return;
+      }
+
+      console.log('✅ Print content generated successfully');
+
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!printWindow) {
+        alert('Please allow popups to print orders');
+        return;
+      }
+
+      // Write content to print window
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        console.log('🖨️ Print window loaded, triggering print dialog');
+        setTimeout(() => {
+          printWindow.print();
+          // Don't close immediately, let user decide
+          // printWindow.close();
+        }, 500);
+      };
+
+      // Fallback: if onload doesn't work, try after a delay
+      setTimeout(() => {
+        if (printWindow.document.readyState === 'complete') {
+          console.log('🖨️ Fallback: Print window ready, triggering print dialog');
+          printWindow.print();
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Error printing order:', error);
+      alert(`Failed to print order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Generate HTML content for printing
+  const generatePrintHTML = (order: ApiOrder) => {
+    try {
+      console.log('🔄 Generating print HTML for order:', order.order_number);
+      
+      const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-PH', {
+          style: 'currency',
+          currency: 'PHP'
+        }).format(amount);
+      };
+
+      const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleString('en-PH', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      };
+
+      // Safe helper functions for handling arrays
+      const safeMapToString = (arr: any, nameKey: string = 'name') => {
+        if (!arr || !Array.isArray(arr)) return '';
+        return arr.map(item => {
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object' && item !== null) {
+            return item[nameKey] || item.name || JSON.stringify(item);
+          }
+          return String(item);
+        }).join(', ');
+      };
+
+      // Get items from either order_items or items
+      const items = order.order_items || order.items || [];
+      console.log('📦 Items for printing:', items.length, 'items found');
+      
+      // Debug: Log item structure for first item
+      if (items.length > 0) {
+        console.log('🔍 First item structure:', {
+          item: items[0],
+          hasCustomizations: !!items[0].customizations,
+          customizationsType: typeof items[0].customizations,
+          customizationsIsArray: Array.isArray(items[0].customizations),
+          hasAddons: !!items[0].addons,
+          addonsType: typeof items[0].addons,
+          addonsIsArray: Array.isArray(items[0].addons)
+        });
+      }
+
+      if (!order || !order.order_number) {
+        console.error('❌ Invalid order data for printing');
+        return null;
+      }
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Order Receipt - ${order.order_number}</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            font-size: 12px; 
+            margin: 0; 
+            padding: 20px; 
+            line-height: 1.4;
+          }
+          .header { 
+            text-align: center; 
+            border-bottom: 2px solid #000; 
+            padding-bottom: 15px; 
+            margin-bottom: 20px; 
+          }
+          .order-info { 
+            margin-bottom: 20px; 
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+          }
+          .order-info div {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+          }
+          .items-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px; 
+          }
+          .items-table th, .items-table td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: left; 
+          }
+          .items-table th { 
+            background-color: #f5f5f5; 
+            font-weight: bold;
+          }
+          .totals { 
+            text-align: right; 
+            margin-top: 20px; 
+            border-top: 2px solid #000;
+            padding-top: 15px;
+          }
+          .status-badges {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .status-completed { background-color: #dcfce7; color: #166534; }
+          .status-pending { background-color: #dbeafe; color: #1e40af; }
+          .status-preparing { background-color: #fef3c7; color: #92400e; }
+          .status-cancelled { background-color: #fecaca; color: #991b1b; }
+          .payment-paid { background-color: #dcfce7; color: #166534; }
+          .payment-unpaid { background-color: #fecaca; color: #991b1b; }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-style: italic;
+            color: #666;
+          }
+          @media print {
+            body { margin: 0; padding: 15px; }
+            .header { page-break-after: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>RestaurantOS</h1>
+          <h2>ORDER RECEIPT</h2>
+          <p>Order #${order.order_number}</p>
+        </div>
+        
+        <div class="order-info">
+          <div>
+            <h3>Customer Information</h3>
+            <p><strong>Name:</strong> ${order.customer_name || 'Walk-in Customer'}</p>
+            ${order.customer_phone ? `<p><strong>Phone:</strong> ${order.customer_phone}</p>` : ''}
+            <p><strong>Order Type:</strong> ${order.order_type.replace('_', ' ').toUpperCase()}</p>
+            ${order.table_number ? `<p><strong>Table:</strong> ${order.table_number}</p>` : ''}
+          </div>
+          <div>
+            <h3>Order Details</h3>
+            <p><strong>Date:</strong> ${formatDate(order.created_at)}</p>
+            <p><strong>Status:</strong> <span class="status-badges status-${order.status}">${order.status}</span></p>
+            <p><strong>Payment:</strong> <span class="status-badges payment-${order.payment_status}">${order.payment_status}</span></p>
+            <p><strong>Payment Method:</strong> ${order.payment_method || 'N/A'}</p>
+          </div>
+        </div>
+
+        ${order.special_instructions ? `
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+          <h4>Special Instructions:</h4>
+          <p>${order.special_instructions}</p>
+        </div>
+        ` : ''}
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.length > 0 ? 
+              items.map((item, index) => {
+                try {
+                  return `
+                    <tr>
+                      <td>
+                        ${item.menu_items?.name || item.menu_item?.name || 'Unknown Item'}
+                        ${item.customizations && safeMapToString(item.customizations) ? 
+                          `<br><small>Customizations: ${safeMapToString(item.customizations)}</small>` : ''}
+                        ${item.addons && safeMapToString(item.addons) ? 
+                          `<br><small>Add-ons: ${safeMapToString(item.addons)}</small>` : ''}
+                        ${item.special_instructions ? 
+                          `<br><small><em>Note: ${item.special_instructions}</em></small>` : ''}
+                      </td>
+                      <td>${item.quantity || 0}</td>
+                      <td>${formatCurrency(item.unit_price || 0)}</td>
+                      <td>${formatCurrency((item.unit_price || 0) * (item.quantity || 0))}</td>
+                    </tr>
+                  `;
+                } catch (itemError) {
+                  console.error(`❌ Error processing item ${index}:`, itemError, item);
+                  return `
+                    <tr>
+                      <td>Error processing item ${index + 1}</td>
+                      <td>-</td>
+                      <td>-</td>
+                      <td>-</td>
+                    </tr>
+                  `;
+                }
+              }).join('') : 
+              '<tr><td colspan="4" style="text-align: center; color: #666;">No items found</td></tr>'
+            }
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <p><strong>Subtotal:</strong> ${formatCurrency(order.subtotal || 0)}</p>
+          ${order.discount_amount && order.discount_amount > 0 ? `<p><strong>Discount:</strong> -${formatCurrency(order.discount_amount)}</p>` : ''}
+          <p><strong>Tax:</strong> ${formatCurrency(order.tax_amount || 0)}</p>
+          <p><strong>Total Amount:</strong> <strong style="font-size: 14px;">${formatCurrency(order.total_amount)}</strong></p>
+        </div>
+
+        <div class="footer">
+          <p>Thank you for your business!</p>
+          <p>Generated on ${new Date().toLocaleString()}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    } catch (error) {
+      console.error('❌ Error generating print HTML:', error);
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Print Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .error { color: red; background: #ffe6e6; padding: 15px; border-radius: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h2>Print Error</h2>
+            <p>Failed to generate print content for order ${order.order_number || 'Unknown'}.</p>
+            <p>Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>
+            <p>Please try refreshing the page and printing again.</p>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+  };
+
   // Check if order can be deleted
   const canDeleteOrder = (order: ApiOrder) => {
     // Cannot delete paid orders (must refund first)
@@ -335,10 +696,28 @@ const OrderHistory: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Order History</h1>
           <p className="text-gray-600 mt-1">View and manage all customer orders and transactions</p>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200">
-          <Download className="h-4 w-4" />
-          <span>Export Report</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={async () => {
+              console.log('🔄 Refreshing order items...');
+              try {
+                await fetchOrders(currentPage, false);
+                console.log('✅ Order items refreshed');
+              } catch (err) {
+                console.error('❌ Error refreshing order items:', err);
+              }
+            }}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200"
+            title="Refresh order items from kitchen endpoint"
+          >
+            <Package className="h-4 w-4" />
+            <span>Refresh Items</span>
+          </button>
+          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200">
+            <Download className="h-4 w-4" />
+            <span>Export Report</span>
+          </button>
+        </div>
       </div>
 
       {/* Error Display */}
@@ -347,6 +726,101 @@ const OrderHistory: React.FC = () => {
           <div className="flex items-center space-x-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />
             <span className="text-red-800">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Section - Only show in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-900">Debug Information</h3>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  console.log('🔍 Current orders state:', orders);
+                  console.log('🔍 Orders with items:', orders.map(order => ({
+                    id: order.id,
+                    order_number: order.order_number,
+                    itemsCount: order.order_items?.length || order.items?.length || 0,
+                    hasOrderItems: !!order.order_items,
+                    hasItems: !!order.items,
+                    order_items: order.order_items,
+                    items: order.items
+                  })));
+                }}
+                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 border border-blue-300 rounded hover:bg-blue-200"
+              >
+                Debug Orders State
+              </button>
+              <button
+                onClick={async () => {
+                  console.log('🧪 Testing API endpoints...');
+                  try {
+                    // Test regular orders endpoint
+                    const ordersResponse = await api.orders.getAll({ page: 1, limit: 5 });
+                    const ordersResult = await ordersResponse.json();
+                    console.log('📋 Regular orders result:', ordersResult);
+                    
+                    // Test kitchen orders endpoint
+                    const kitchenResponse = await api.orders.getKitchenOrders();
+                    const kitchenResult = await kitchenResponse.json();
+                    console.log('🍳 Kitchen orders result:', kitchenResult);
+                    
+                    if (kitchenResult.success && kitchenResult.data) {
+                      console.log('✅ Kitchen orders endpoint working');
+                      console.log('📦 Sample order with items:', kitchenResult.data[0]);
+                    }
+                  } catch (err) {
+                    console.error('❌ Error testing endpoints:', err);
+                  }
+                }}
+                className="px-3 py-1 text-xs font-medium text-purple-600 bg-purple-100 border border-purple-300 rounded hover:bg-purple-200"
+              >
+                Test API Endpoints
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🖨️ Testing print functionality...');
+                  const testOrder = orders.find(order => order.status === 'ready');
+                  if (testOrder) {
+                    console.log('🧪 Testing print with ready order:', testOrder.order_number);
+                    handlePrintOrder(testOrder);
+                  } else {
+                    console.log('⚠️ No ready orders found for testing');
+                    const anyOrder = orders[0];
+                    if (anyOrder) {
+                      console.log('🧪 Testing print with first available order:', anyOrder.order_number);
+                      handlePrintOrder(anyOrder);
+                    } else {
+                      console.log('❌ No orders available for testing');
+                    }
+                  }
+                }}
+                className="px-3 py-1 text-xs font-medium text-orange-600 bg-orange-100 border border-orange-300 rounded hover:bg-orange-200"
+              >
+                Test Print Function
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="bg-white p-3 rounded border">
+              <p className="font-medium text-gray-900 mb-1">Orders Loaded</p>
+              <p className="text-gray-600">{orders.length}</p>
+            </div>
+            <div className="bg-white p-3 rounded border">
+              <p className="font-medium text-gray-900 mb-1">Orders with Items</p>
+              <p className="text-gray-600">
+                {orders.filter(o => (o.order_items && o.order_items.length > 0) || (o.items && o.items.length > 0)).length}
+              </p>
+            </div>
+            <div className="bg-white p-3 rounded border">
+              <p className="font-medium text-gray-900 mb-1">Orders without Items</p>
+              <p className="text-gray-600">
+                {orders.filter(o => (!o.order_items || o.order_items.length === 0) && (!o.items || o.items.length === 0)).length}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -527,7 +1001,20 @@ const OrderHistory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{order.order_number}</div>
+                        <div className="flex items-center space-x-2">
+                          <div className="text-sm font-medium text-gray-900">{order.order_number}</div>
+                          {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <Package className="h-3 w-3 mr-1" />
+                              {order.order_items?.length || order.items?.length || 0} items
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              No items
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">{new Date(order.created_at).toLocaleString()}</div>
                         <div className="text-xs text-gray-400 mt-1">
                           <span className={`px-2 py-1 rounded-full ${
@@ -551,14 +1038,48 @@ const OrderHistory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {order.items && order.items.length > 0 ? (
-                          order.items.map((item, index) => (
-                            <div key={index} className="mb-1">
-                              {item.menu_item?.name || 'Unknown Item'} x{item.quantity}
-                            </div>
-                          ))
+                        {order.order_items && order.order_items.length > 0 ? (
+                          <div className="space-y-1" title={`${order.order_items.length} items in this order`}>
+                            {order.order_items.slice(0, 2).map((item, index) => (
+                              <div key={index} className="flex items-center space-x-2 group">
+                                <span className="text-gray-600">•</span>
+                                <span className="font-medium group-hover:text-blue-600 transition-colors">
+                                  {item.menu_items?.name || item.menu_item?.name || 'Unknown Item'}
+                                </span>
+                                <span className="text-gray-500">x{item.quantity}</span>
+                                {item.unit_price && (
+                                  <span className="text-xs text-gray-400">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
+                                )}
+                              </div>
+                            ))}
+                            {order.order_items.length > 2 && (
+                              <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
+                                +{order.order_items.length - 2} more item{order.order_items.length - 2 !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
+                        ) : order.items && order.items.length > 0 ? (
+                          <div className="space-y-1" title={`${order.items.length} items in this order`}>
+                            {order.items.slice(0, 2).map((item, index) => (
+                              <div key={index} className="flex items-center space-x-2 group">
+                                <span className="text-gray-600">•</span>
+                                <span className="font-medium group-hover:text-blue-600 transition-colors">
+                                  {item.menu_item?.name || 'Unknown Item'}
+                                </span>
+                                <span className="text-gray-500">x{item.quantity}</span>
+                              </div>
+                            ))}
+                            {order.items.length > 2 && (
+                              <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
+                                +{order.items.length - 2} more item{order.items.length - 2 !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-gray-400">No items</span>
+                          <div className="flex items-center space-x-2 text-gray-400" title="Click 'Refresh Items' to load order details">
+                            <Package className="h-4 w-4" />
+                            <span className="text-sm">No items found</span>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -588,7 +1109,11 @@ const OrderHistory: React.FC = () => {
                         <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button className="text-gray-600 hover:text-gray-700 p-1 rounded" title="Print">
+                        <button 
+                          onClick={() => handlePrintOrder(order)}
+                          className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                          title="Print Order"
+                        >
                           <Printer className="h-4 w-4" />
                         </button>
                         {canCancelOrder(order) && (

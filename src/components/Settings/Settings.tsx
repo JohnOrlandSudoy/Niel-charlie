@@ -1,5 +1,24 @@
-import React, { useState } from 'react';
-import { Save, Shield, Bell, Database, Users, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, Shield, Bell, Database, Users, DollarSign, CreditCard, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { api } from '../../utils/api';
+
+// Payment Method Types
+interface PaymentMethod {
+  id: string;
+  method_key: string;
+  method_name: string;
+  method_description: string;
+  is_enabled: boolean;
+  is_online: boolean;
+  requires_setup: boolean;
+  display_order: number;
+  icon_name: string;
+  color_code: string;
+  config_data: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
@@ -32,13 +51,78 @@ const Settings: React.FC = () => {
     smsNotifications: false
   });
 
+  // Payment Methods State
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [togglingMethod, setTogglingMethod] = useState<string | null>(null);
+  const [paymentMethodsError, setPaymentMethodsError] = useState<string | null>(null);
+
   const tabs = [
     { id: 'general', label: 'General', icon: Database },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
     { id: 'users', label: 'User Roles', icon: Users },
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
+
+  // Fetch payment methods
+  const fetchPaymentMethods = async () => {
+    try {
+      setLoadingPaymentMethods(true);
+      setPaymentMethodsError(null);
+      
+      const response = await api.payments.getAdminMethods();
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setPaymentMethods(result.data);
+      } else {
+        setPaymentMethodsError(result.message || 'Failed to fetch payment methods');
+      }
+    } catch (error) {
+      console.error('Error fetching payment methods:', error);
+      setPaymentMethodsError('Failed to fetch payment methods');
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
+
+  // Toggle payment method
+  const togglePaymentMethod = async (methodKey: string, isEnabled: boolean) => {
+    try {
+      setTogglingMethod(methodKey);
+      setPaymentMethodsError(null);
+      
+      const response = await api.payments.toggleMethod(methodKey, isEnabled);
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the payment method in the local state
+        setPaymentMethods(prev => 
+          prev.map(method => 
+            method.method_key === methodKey 
+              ? { ...method, is_enabled: isEnabled, updated_at: result.data.updated_at }
+              : method
+          )
+        );
+      } else {
+        setPaymentMethodsError(result.message || 'Failed to toggle payment method');
+      }
+    } catch (error) {
+      console.error('Error toggling payment method:', error);
+      setPaymentMethodsError('Failed to toggle payment method');
+    } finally {
+      setTogglingMethod(null);
+    }
+  };
+
+  // Load payment methods when component mounts or when payment methods tab is selected
+  useEffect(() => {
+    if (activeTab === 'payment-methods') {
+      fetchPaymentMethods();
+    }
+  }, [activeTab]);
 
   const handleSave = () => {
     console.log('Settings saved');
@@ -283,6 +367,135 @@ const Settings: React.FC = () => {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'payment-methods' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Payment Methods</h3>
+                <button
+                  onClick={fetchPaymentMethods}
+                  disabled={loadingPaymentMethods}
+                  className="px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {loadingPaymentMethods ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4" />
+                  )}
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {paymentMethodsError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                    <div className="ml-3">
+                      <p className="text-sm text-red-800">{paymentMethodsError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {loadingPaymentMethods ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-600">Loading payment methods...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {paymentMethods.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <CreditCard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No payment methods found</p>
+                    </div>
+                  ) : (
+                    paymentMethods
+                      .sort((a, b) => a.display_order - b.display_order)
+                      .map((method) => (
+                        <div
+                          key={method.id}
+                          className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div
+                                className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium"
+                                style={{ backgroundColor: method.color_code }}
+                              >
+                                {method.icon_name === 'cash' && '₱'}
+                                {method.icon_name === 'gcash' && 'G'}
+                                {method.icon_name === 'card' && '💳'}
+                                {method.icon_name === 'paymongo' && 'P'}
+                                {method.icon_name === 'qrph' && 'QR'}
+                                {!['cash', 'gcash', 'card', 'paymongo', 'qrph'].includes(method.icon_name) && '💳'}
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">{method.method_name}</h4>
+                                <p className="text-sm text-gray-500">{method.method_description}</p>
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <span
+                                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      method.is_online
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-gray-100 text-gray-800'
+                                    }`}
+                                  >
+                                    {method.is_online ? 'Online' : 'Offline'}
+                                  </span>
+                                  {method.requires_setup && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                      Setup Required
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span
+                                className={`text-sm font-medium ${
+                                  method.is_enabled ? 'text-green-600' : 'text-gray-400'
+                                }`}
+                              >
+                                {method.is_enabled ? 'Enabled' : 'Disabled'}
+                              </span>
+                              <button
+                                onClick={() => togglePaymentMethod(method.method_key, !method.is_enabled)}
+                                disabled={togglingMethod === method.method_key}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                  method.is_enabled ? 'bg-blue-600' : 'bg-gray-200'
+                                } ${togglingMethod === method.method_key ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    method.is_enabled ? 'translate-x-6' : 'translate-x-1'
+                                  }`}
+                                />
+                                {togglingMethod === method.method_key && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                                  </div>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Payment Method Information</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• <strong>Online methods</strong> require internet connection and may have additional setup requirements</li>
+                  <li>• <strong>Offline methods</strong> work without internet but require manual processing</li>
+                  <li>• <strong>Setup Required</strong> indicates the method needs additional configuration</li>
+                  <li>• Only enabled payment methods will be available to customers during checkout</li>
+                </ul>
               </div>
             </div>
           )}
