@@ -40,8 +40,8 @@ CREATE TABLE public.ingredients (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ingredients_pkey PRIMARY KEY (id),
-  CONSTRAINT ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT ingredients_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
+  CONSTRAINT ingredients_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.menu_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -103,9 +103,9 @@ CREATE TABLE public.menu_items (
   created_by uuid,
   updated_by uuid,
   CONSTRAINT menu_items_pkey PRIMARY KEY (id),
+  CONSTRAINT menu_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
   CONSTRAINT menu_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT menu_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.menu_categories(id),
-  CONSTRAINT menu_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
+  CONSTRAINT menu_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.menu_categories(id)
 );
 CREATE TABLE public.order_discounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -149,8 +149,8 @@ CREATE TABLE public.orders (
   customer_phone character varying,
   order_type character varying NOT NULL CHECK (order_type::text = ANY (ARRAY['dine_in'::character varying, 'takeout'::character varying]::text[])),
   status character varying NOT NULL DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'preparing'::character varying, 'ready'::character varying, 'completed'::character varying, 'cancelled'::character varying]::text[])),
-  payment_status character varying NOT NULL DEFAULT 'unpaid'::character varying CHECK (payment_status::text = ANY (ARRAY['unpaid'::character varying, 'paid'::character varying, 'refunded'::character varying]::text[])),
-  payment_method character varying CHECK (payment_method::text = ANY (ARRAY['cash'::character varying, 'gcash'::character varying, 'card'::character varying]::text[])),
+  payment_status character varying NOT NULL DEFAULT 'unpaid'::character varying CHECK (payment_status::text = ANY (ARRAY['unpaid'::character varying::text, 'paid'::character varying::text, 'refunded'::character varying::text, 'pending'::character varying::text, 'failed'::character varying::text, 'cancelled'::character varying::text])),
+  payment_method character varying CHECK (payment_method::text = ANY (ARRAY['cash'::character varying::text, 'gcash'::character varying::text, 'card'::character varying::text, 'paymongo'::character varying::text, 'qrph'::character varying::text])),
   subtotal numeric NOT NULL DEFAULT 0,
   discount_amount numeric DEFAULT 0,
   tax_amount numeric DEFAULT 0,
@@ -168,6 +168,81 @@ CREATE TABLE public.orders (
   CONSTRAINT orders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
   CONSTRAINT orders_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
 );
+CREATE TABLE public.payment_methods_config (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  method_key character varying NOT NULL UNIQUE CHECK (method_key::text = ANY (ARRAY['cash'::character varying, 'gcash'::character varying, 'card'::character varying, 'paymongo'::character varying, 'qrph'::character varying, 'grab_pay'::character varying, 'shopeepay'::character varying]::text[])),
+  method_name character varying NOT NULL,
+  method_description text,
+  is_enabled boolean NOT NULL DEFAULT true,
+  is_online boolean NOT NULL DEFAULT false,
+  requires_setup boolean NOT NULL DEFAULT false,
+  display_order integer DEFAULT 0,
+  icon_name character varying,
+  color_code character varying,
+  config_data jsonb DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  updated_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payment_methods_config_pkey PRIMARY KEY (id),
+  CONSTRAINT payment_methods_config_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT payment_methods_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
+);
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  payment_intent_id character varying NOT NULL UNIQUE,
+  order_id uuid,
+  order_number character varying,
+  payment_id character varying,
+  amount numeric NOT NULL,
+  currency character varying NOT NULL DEFAULT 'PHP'::character varying,
+  description text,
+  status USER-DEFINED NOT NULL DEFAULT 'awaiting_payment_method'::payment_intent_status,
+  payment_status USER-DEFINED NOT NULL DEFAULT 'pending'::payment_status,
+  payment_method USER-DEFINED NOT NULL DEFAULT 'paymongo'::payment_method,
+  payment_source_type USER-DEFINED,
+  qr_code_url character varying,
+  qr_code_data text,
+  qr_code_expires_at timestamp with time zone,
+  fee_amount numeric DEFAULT 0,
+  net_amount numeric,
+  external_reference_number character varying,
+  error_message text,
+  error_code character varying,
+  paid_at timestamp with time zone,
+  failed_at timestamp with time zone,
+  cancelled_at timestamp with time zone,
+  paymongo_response jsonb,
+  webhook_events jsonb DEFAULT '[]'::jsonb,
+  metadata jsonb,
+  created_by uuid,
+  updated_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT payments_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.paymongo_payments (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  order_id uuid NOT NULL,
+  payment_intent_id character varying NOT NULL UNIQUE,
+  amount numeric NOT NULL,
+  currency character varying NOT NULL DEFAULT 'PHP'::character varying,
+  status character varying NOT NULL DEFAULT 'pending'::character varying,
+  qr_code_url character varying,
+  qr_code_data text,
+  expires_at timestamp with time zone,
+  metadata jsonb,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT paymongo_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT paymongo_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT paymongo_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
 CREATE TABLE public.stock_alerts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   ingredient_id uuid NOT NULL,
@@ -180,8 +255,8 @@ CREATE TABLE public.stock_alerts (
   resolved_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT stock_alerts_pkey PRIMARY KEY (id),
-  CONSTRAINT stock_alerts_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT stock_alerts_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id)
+  CONSTRAINT stock_alerts_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id),
+  CONSTRAINT stock_alerts_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.stock_movements (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -194,8 +269,8 @@ CREATE TABLE public.stock_movements (
   performed_by uuid NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT stock_movements_pkey PRIMARY KEY (id),
-  CONSTRAINT stock_movements_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id),
-  CONSTRAINT stock_movements_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.user_profiles(id)
+  CONSTRAINT stock_movements_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT stock_movements_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id)
 );
 CREATE TABLE public.user_profiles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

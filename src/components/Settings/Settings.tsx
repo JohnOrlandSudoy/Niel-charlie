@@ -24,10 +24,10 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
   
   const [generalSettings, setGeneralSettings] = useState({
-    restaurantName: 'RestaurantOS',
+    restaurantName: 'DONG G PASTILLAN',
     address: '123 Main Street, City, Country',
     phone: '+63 912 345 6789',
-    email: 'admin@restaurant.com',
+    email: 'admin@donggpastillan.com',
     timezone: 'Asia/Manila',
     currency: 'PHP',
     taxRate: '12'
@@ -132,9 +132,15 @@ const Settings: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">System Settings</h1>
-          <p className="text-gray-600 mt-1">Configure your restaurant management system</p>
+        <div className="flex items-center space-x-4">
+          <img src="/logo.svg" alt="Restaurant Logo" className="w-12 h-12" onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }} />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Admin - DONG G PASTILLAN</h1>
+            <p className="text-gray-600 mt-1">Ordering Management System Settings</p>
+          </div>
         </div>
         <button
           onClick={handleSave}

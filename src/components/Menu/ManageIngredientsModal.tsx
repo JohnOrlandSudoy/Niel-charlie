@@ -23,6 +23,35 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<MenuItemIngredient | null>(null);
 
+  // Common measurement units for ingredients
+  const measurementUnits = [
+    { value: 'g', label: 'Grams (g)' },
+    { value: 'kg', label: 'Kilograms (kg)' },
+    { value: 'ml', label: 'Milliliters (ml)' },
+    { value: 'l', label: 'Liters (l)' },
+    { value: 'cup', label: 'Cups' },
+    { value: 'tbsp', label: 'Tablespoons (tbsp)' },
+    { value: 'tsp', label: 'Teaspoons (tsp)' },
+    { value: 'oz', label: 'Ounces (oz)' },
+    { value: 'lb', label: 'Pounds (lb)' },
+    { value: 'piece', label: 'Pieces' },
+    { value: 'slice', label: 'Slices' },
+    { value: 'clove', label: 'Cloves' },
+    { value: 'pinch', label: 'Pinch' },
+    { value: 'dash', label: 'Dash' },
+    { value: 'sprig', label: 'Sprigs' },
+    { value: 'bunch', label: 'Bunch' },
+    { value: 'head', label: 'Head' },
+    { value: 'can', label: 'Can' },
+    { value: 'bottle', label: 'Bottle' },
+    { value: 'pack', label: 'Pack' },
+    { value: 'bag', label: 'Bag' },
+    { value: 'box', label: 'Box' },
+    { value: 'jar', label: 'Jar' },
+    { value: 'tube', label: 'Tube' },
+    { value: 'custom', label: 'Custom...' }
+  ];
+
   // Form data for adding new ingredient
   const [addFormData, setAddFormData] = useState({
     ingredient_id: '',
@@ -37,6 +66,42 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
     unit: '',
     is_optional: false
   });
+
+  // State for custom unit input
+  const [showCustomUnitInput, setShowCustomUnitInput] = useState(false);
+  const [customUnit, setCustomUnit] = useState('');
+
+  // Handle unit selection for add form
+  const handleAddUnitChange = (selectedUnit: string) => {
+    if (selectedUnit === 'custom') {
+      setShowCustomUnitInput(true);
+      setAddFormData({ ...addFormData, unit: '' });
+    } else {
+      setShowCustomUnitInput(false);
+      setAddFormData({ ...addFormData, unit: selectedUnit });
+    }
+  };
+
+  // Handle unit selection for edit form
+  const handleEditUnitChange = (selectedUnit: string) => {
+    if (selectedUnit === 'custom') {
+      setShowCustomUnitInput(true);
+      setEditFormData({ ...editFormData, unit: '' });
+    } else {
+      setShowCustomUnitInput(false);
+      setEditFormData({ ...editFormData, unit: selectedUnit });
+    }
+  };
+
+  // Handle custom unit input
+  const handleCustomUnitChange = (value: string, isEdit: boolean = false) => {
+    setCustomUnit(value);
+    if (isEdit) {
+      setEditFormData({ ...editFormData, unit: value });
+    } else {
+      setAddFormData({ ...addFormData, unit: value });
+    }
+  };
 
   // Fetch menu item ingredients
   const fetchMenuItemIngredients = async () => {
@@ -122,6 +187,8 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
         setIngredients(prev => [...prev, result.data]);
         setAddFormData({ ingredient_id: '', quantity_required: '', unit: '', is_optional: false });
         setShowAddForm(false);
+        setShowCustomUnitInput(false);
+        setCustomUnit('');
         onIngredientsUpdated?.();
         // Refresh available ingredients to update the dropdown
         fetchAvailableIngredients();
@@ -201,6 +268,13 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
       unit: ingredient.unit,
       is_optional: ingredient.is_optional
     });
+    
+    // Check if the current unit is in our predefined list
+    const isCustomUnit = !measurementUnits.some(unit => unit.value === ingredient.unit);
+    setShowCustomUnitInput(isCustomUnit);
+    if (isCustomUnit) {
+      setCustomUnit(ingredient.unit);
+    }
   };
 
   // Check if ingredient is available (has sufficient stock)
@@ -299,13 +373,43 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Unit
                     </label>
-                    <input
-                      type="text"
-                      value={addFormData.unit}
-                      onChange={(e) => setAddFormData({ ...addFormData, unit: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
+                    {!showCustomUnitInput ? (
+                      <select
+                        value={addFormData.unit}
+                        onChange={(e) => handleAddUnitChange(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      >
+                        <option value="">Select unit</option>
+                        {measurementUnits.map(unit => (
+                          <option key={unit.value} value={unit.value}>
+                            {unit.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={customUnit}
+                          onChange={(e) => handleCustomUnitChange(e.target.value, false)}
+                          placeholder="Enter custom unit"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCustomUnitInput(false);
+                            setAddFormData({ ...addFormData, unit: '' });
+                            setCustomUnit('');
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-700"
+                        >
+                          ← Back to unit list
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -334,7 +438,11 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setShowCustomUnitInput(false);
+                      setCustomUnit('');
+                    }}
                     className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                   >
                     Cancel
@@ -384,13 +492,43 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Unit
                             </label>
-                            <input
-                              type="text"
-                              value={editFormData.unit}
-                              onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
-                              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              required
-                            />
+                            {!showCustomUnitInput ? (
+                              <select
+                                value={editFormData.unit}
+                                onChange={(e) => handleEditUnitChange(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                              >
+                                <option value="">Select unit</option>
+                                {measurementUnits.map(unit => (
+                                  <option key={unit.value} value={unit.value}>
+                                    {unit.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={customUnit}
+                                  onChange={(e) => handleCustomUnitChange(e.target.value, true)}
+                                  placeholder="Enter custom unit"
+                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowCustomUnitInput(false);
+                                    setEditFormData({ ...editFormData, unit: '' });
+                                    setCustomUnit('');
+                                  }}
+                                  className="text-sm text-blue-600 hover:text-blue-700"
+                                >
+                                  ← Back to unit list
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
@@ -419,7 +557,11 @@ const ManageIngredientsModal: React.FC<ManageIngredientsModalProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setEditingIngredient(null)}
+                            onClick={() => {
+                              setEditingIngredient(null);
+                              setShowCustomUnitInput(false);
+                              setCustomUnit('');
+                            }}
                             className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                           >
                             Cancel

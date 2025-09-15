@@ -376,7 +376,7 @@ const CashierDashboard: React.FC = React.memo(() => {
       {/* Orders List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
+          <h2 className="text-lg font-semibold text-gray-900">All Orders</h2>
         </div>
 
         {isLoading ? (

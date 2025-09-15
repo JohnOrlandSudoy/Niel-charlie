@@ -1,9 +1,14 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { X, Plus, Trash2, Save, User, Phone, MapPin, Clock, MessageSquare, AlertTriangle, XCircle } from 'lucide-react';
+import { X, Plus, Trash2, Save, User, Phone, MapPin, Clock, MessageSquare, AlertTriangle, XCircle, CreditCard, QrCode } from 'lucide-react';
 import { api } from '../../utils/api';
 import { CreateOrderRequest, AddOrderItemRequest, Order, MenuItem, ApiResponse } from '../../types/orders';
 import MenuItemSelector from './MenuItemSelector';
+import PaymentModal from './PaymentModal';
+import EnhancedPaymentModal from './EnhancedPaymentModal';
 import { useInventoryStock } from '../../hooks/useInventoryStock';
+import { checkIngredientAvailability, isMenuItemAvailableForOrder } from '../../utils/ingredientAvailability';
+import { usePayMongoPayment } from '../../hooks/usePayMongoPayment';
+import PayMongoPaymentModal from './PayMongoPaymentModal';
 
 interface NewOrderModalProps {
   onClose: () => void;
@@ -34,9 +39,32 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showEnhancedPaymentModal, setShowEnhancedPaymentModal] = useState(false);
+  const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    payment_status: 'unpaid' as 'unpaid' | 'paid' | 'refunded',
+    payment_method: 'cash' as 'cash' | 'gcash' | 'card' | 'paymongo'
+  });
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
 
   // Use inventory stock checking
   const { checkOrderStock } = useInventoryStock();
+
+  // Use PayMongo payment hook
+  const {
+    paymentIntent,
+    isCreatingPayment,
+    isCheckingStatus,
+    isCancelling,
+    error: payMongoError,
+    showPayMongoModal,
+    createPaymentIntent,
+    cancelPayment,
+    closePayMongoModal,
+    setError: setPayMongoError
+  } = usePayMongoPayment();
 
   // Calculate totals with memoization
   const { subtotal, tax, total } = useMemo(() => {
@@ -91,6 +119,23 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
     if (orderData.order_type === 'dine_in' && !orderData.table_number) {
       setError('Table number is required for dine-in orders');
+      return;
+    }
+
+    // Check ingredient availability for all items
+    const ingredientCheck = orderItems.every(item => {
+      return isMenuItemAvailableForOrder(item.menuItem);
+    });
+
+    if (!ingredientCheck) {
+      const unavailableItems = orderItems
+        .filter(item => !isMenuItemAvailableForOrder(item.menuItem))
+        .map(item => {
+          const availability = checkIngredientAvailability(item.menuItem);
+          return `${item.menuItem.name} (${availability.missingCount} missing ingredients)`;
+        })
+        .join(', ');
+      setError(`Cannot create order: ${unavailableItems}`);
       return;
     }
 
@@ -208,24 +253,40 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
       console.log(`Successfully added ${itemsAddedSuccessfully} out of ${orderItems.length} items`);
 
-      // Step 3: Create updated order with correct totals
+      // Step 3: Create updated order with correct totals and items
       const updatedOrder: Order = {
         ...createdOrder,
         subtotal: subtotal,
         tax_amount: tax,
-        total_amount: total
+        total_amount: total,
+        order_items: orderItems.map(item => ({
+          id: `temp-${item.menuItem.id}-${Date.now()}`, // Temporary ID
+          menu_item_id: item.menuItem.id,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          total_price: item.totalPrice,
+          customizations: item.customizations,
+          special_instructions: item.specialInstructions,
+          menu_items: {
+            id: item.menuItem.id,
+            name: item.menuItem.name,
+            price: item.menuItem.price,
+            description: item.menuItem.description
+          }
+        }))
       };
 
       console.log('Updated order with totals:', updatedOrder);
       
-      // Step 4: Notify parent component with updated order
-      onOrderCreated(updatedOrder);
+      // Step 4: Show payment method selection first
+      console.log('Setting currentOrder for payment method selection:', updatedOrder);
+      setCurrentOrder(updatedOrder);
+      setShowPaymentMethodSelection(true);
       
       // Show warning if some items failed to add
       if (itemsAddedSuccessfully < orderItems.length) {
         console.warn(`Warning: Only ${itemsAddedSuccessfully} out of ${orderItems.length} items were added to the order. Please check the order details.`);
       }
-      onClose();
 
     } catch (err) {
       console.error('Error creating order:', err);
@@ -233,6 +294,108 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
     } finally {
       setIsCreating(false);
     }
+  };
+
+  // Payment handling functions (matching PaymentModal approach)
+  const handleUpdatePayment = useCallback(async (orderId: string, paymentData: any) => {
+    setIsUpdatingPayment(true);
+    try {
+      const response = await api.orders.updatePayment(orderId, paymentData);
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('Payment updated successfully:', result);
+        // Update the current order with new payment status
+        if (currentOrder) {
+          setCurrentOrder(prev => prev ? { ...prev, ...paymentData } : null);
+        }
+        // Close payment modal after successful update
+        setShowPaymentModal(false);
+      } else {
+        throw new Error(result.message || 'Failed to update payment');
+      }
+    } catch (err) {
+      console.error('Error updating payment:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update payment');
+    } finally {
+      setIsUpdatingPayment(false);
+    }
+  }, [currentOrder]);
+
+  const handleApplyDiscount = useCallback(async (orderId: string, discountCode: string) => {
+    setIsApplyingDiscount(true);
+    try {
+      const response = await api.orders.applyDiscount(orderId, { discount_code: discountCode });
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('Discount applied successfully:', result);
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to apply discount');
+      }
+    } catch (err) {
+      console.error('Error applying discount:', err);
+      setError(err instanceof Error ? err.message : 'Failed to apply discount');
+      return null;
+    } finally {
+      setIsApplyingDiscount(false);
+    }
+  }, []);
+
+  const handlePayMongoPayment = useCallback(async (order: Order) => {
+    try {
+      console.log('Creating PayMongo payment for order:', order);
+      const paymentIntent = await createPaymentIntent(order);
+      
+      if (paymentIntent) {
+        console.log('PayMongo payment intent created successfully:', paymentIntent);
+        // PayMongo modal will be shown automatically by the hook
+      } else {
+        setError('Failed to create PayMongo payment intent');
+      }
+    } catch (err) {
+      console.error('Error creating PayMongo payment:', err);
+      setError('Failed to create PayMongo payment. Please try again.');
+    }
+  }, [createPaymentIntent]);
+
+  // Handle payment method selection
+  const handlePaymentMethodSelect = useCallback((method: 'cash' | 'gcash' | 'card' | 'paymongo') => {
+    setPaymentForm(prev => ({ ...prev, payment_method: method }));
+    setShowPaymentMethodSelection(false);
+    
+    // Show appropriate payment modal based on selected method
+    if (method === 'paymongo') {
+      setShowPaymentModal(true); // Use PaymentModal for PayMongo online payments
+    } else {
+      setShowEnhancedPaymentModal(true); // Use EnhancedPaymentModal for cash payments
+    }
+  }, []);
+
+  // Payment modal handlers
+  const handlePaymentComplete = (order: Order) => {
+    console.log('Payment completed for order:', order);
+    setCurrentOrder(null);
+    setShowPaymentModal(false);
+    setShowEnhancedPaymentModal(false);
+    // Reset form
+    setOrderData({
+      order_type: 'dine_in',
+      customer_name: '',
+      customer_phone: '',
+      table_number: undefined,
+      special_instructions: '',
+      estimated_prep_time: undefined
+    });
+    setOrderItems([]);
+    onOrderCreated(order);
+    onClose();
+  };
+
+  const handleReceiptGenerated = (receiptData: any) => {
+    console.log('Receipt generated:', receiptData);
+    // You can add additional receipt handling logic here
   };
 
   return (
@@ -538,6 +701,14 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             <button
               onClick={handleCreateOrder}
               disabled={isCreating || orderItems.length === 0 || (() => {
+                // Check ingredient availability
+                const ingredientCheck = orderItems.every(item => {
+                  return isMenuItemAvailableForOrder(item.menuItem);
+                });
+                
+                if (!ingredientCheck) return true;
+                
+                // Check stock availability
                 const stockCheck = checkOrderStock(orderItems.map(item => ({
                   menuItem: item.menuItem,
                   quantity: item.quantity
@@ -568,6 +739,122 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
         <MenuItemSelector
           onAddToOrder={handleAddMenuItem}
           onClose={() => setShowMenuItemSelector(false)}
+        />
+      )}
+
+      {/* Payment Modal - For PayMongo Online Payments */}
+      {showPaymentModal && currentOrder && (
+        <PaymentModal
+          order={currentOrder}
+          paymentForm={paymentForm}
+          setPaymentForm={setPaymentForm}
+          isUpdatingPayment={isUpdatingPayment}
+          isApplyingDiscount={isApplyingDiscount}
+          onClose={() => setShowPaymentModal(false)}
+          onUpdatePayment={handleUpdatePayment}
+          onApplyDiscount={handleApplyDiscount}
+          onPayMongoPayment={handlePayMongoPayment}
+        />
+      )}
+
+      {/* Enhanced Payment Modal - For Cash Payments */}
+      {showEnhancedPaymentModal && currentOrder && (
+        <EnhancedPaymentModal
+          order={currentOrder}
+          isOpen={showEnhancedPaymentModal}
+          onClose={() => setShowEnhancedPaymentModal(false)}
+          onPaymentComplete={handlePaymentComplete}
+          onReceiptGenerated={handleReceiptGenerated}
+        />
+      )}
+
+      {/* Payment Method Selection Modal */}
+      {showPaymentMethodSelection && currentOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Select Payment Method</h2>
+              <button
+                onClick={() => setShowPaymentMethodSelection(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-gray-600 mb-6">Choose how the customer will pay for this order:</p>
+              
+              <div className="space-y-3">
+                {/* Cash Payment */}
+                <button
+                  onClick={() => handlePaymentMethodSelect('cash')}
+                  className="w-full p-4 border-2 border-green-200 rounded-lg text-left hover:border-green-500 hover:bg-green-50 transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="h-6 w-6 text-green-600" />
+                    <div>
+                      <div className="font-medium text-gray-900">Cash Payment</div>
+                      <div className="text-sm text-gray-600">Physical cash payment with change calculation</div>
+                    </div>
+                  </div>
+                </button>
+                
+                {/* PayMongo Online Payment */}
+                <button
+                  onClick={() => handlePaymentMethodSelect('paymongo')}
+                  className="w-full p-4 border-2 border-blue-200 rounded-lg text-left hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <QrCode className="h-6 w-6 text-blue-600" />
+                    <div>
+                      <div className="font-medium text-gray-900">PayMongo Online</div>
+                      <div className="text-sm text-gray-600">QR code payment (GCash, Cards, Bank QR)</div>
+                    </div>
+                  </div>
+                </button>
+                
+                {/* Other Payment Methods */}
+                <button
+                  onClick={() => handlePaymentMethodSelect('gcash')}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg text-left hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="h-6 w-6 text-gray-600" />
+                    <div>
+                      <div className="font-medium text-gray-900">GCash</div>
+                      <div className="text-sm text-gray-600">GCash mobile payment</div>
+                    </div>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => handlePaymentMethodSelect('card')}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg text-left hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="h-6 w-6 text-gray-600" />
+                    <div>
+                      <div className="font-medium text-gray-900">Credit/Debit Card</div>
+                      <div className="text-sm text-gray-600">Card payment processing</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PayMongo Payment Modal */}
+      {showPayMongoModal && paymentIntent && (
+        <PayMongoPaymentModal
+          paymentIntent={paymentIntent}
+          isCheckingStatus={isCheckingStatus}
+          isCancelling={isCancelling}
+          error={payMongoError}
+          onCancel={() => cancelPayment(paymentIntent.paymentIntentId)}
+          onClose={closePayMongoModal}
         />
       )}
     </div>

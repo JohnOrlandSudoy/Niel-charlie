@@ -28,6 +28,7 @@ const OrderHistory: React.FC = () => {
   const [bulkDeleteResults, setBulkDeleteResults] = useState<any[]>([]);
   const [forceDelete, setForceDelete] = useState(false);
   const [showForceDeleteWarning, setShowForceDeleteWarning] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   // Fetch orders from API
   const fetchOrders = async (page: number = currentPage, resetPage: boolean = false) => {
@@ -316,6 +317,19 @@ const OrderHistory: React.FC = () => {
     }
   };
 
+  // Handle note expansion
+  const toggleNoteExpansion = (orderId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
   // Handle print order
   const handlePrintOrder = (order: ApiOrder) => {
     try {
@@ -450,6 +464,17 @@ const OrderHistory: React.FC = () => {
             padding-bottom: 15px; 
             margin-bottom: 20px; 
           }
+          .logo { 
+            width: 60px; 
+            height: 60px; 
+            margin: 0 auto 10px; 
+            display: block; 
+          }
+          .restaurant-name { 
+            font-size: 18px; 
+            font-weight: bold; 
+            margin-bottom: 5px; 
+          }
           .order-info { 
             margin-bottom: 20px; 
             display: grid;
@@ -509,7 +534,9 @@ const OrderHistory: React.FC = () => {
       </head>
       <body>
         <div class="header">
-          <h1>RestaurantOS</h1>
+          <img src="/logo.svg" alt="Restaurant Logo" class="logo" onerror="this.style.display='none'">
+          <div class="restaurant-name">DONG G PASTILLAN</div>
+          <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Ordering Management System</div>
           <h2>ORDER RECEIPT</h2>
           <p>Order #${order.order_number}</p>
         </div>
@@ -592,8 +619,9 @@ const OrderHistory: React.FC = () => {
         </div>
 
         <div class="footer">
-          <p>Thank you for your business!</p>
-          <p>Generated on ${new Date().toLocaleString()}</p>
+          <p>Thank you for your order!</p>
+          <p>DONG G PASTILLAN - Ordering Management System</p>
+          <p>Generated: ${new Date().toLocaleString()}</p>
         </div>
       </body>
       </html>
@@ -954,10 +982,10 @@ const OrderHistory: React.FC = () => {
               <span className="ml-2 text-gray-600">Loading orders...</span>
             </div>
           ) : orders.length > 0 ? (
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <input
                       type="checkbox"
                       checked={selectedOrders.length === orders.length && orders.length > 0}
@@ -965,33 +993,33 @@ const OrderHistory: React.FC = () => {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-48 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Order Details
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-48 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Customer
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-64 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Items
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Total
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200" style={{ minHeight: '80px' }}>
+                    <td className="w-12 px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={selectedOrders.includes(order.id)}
@@ -999,23 +1027,27 @@ const OrderHistory: React.FC = () => {
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-48 px-6 py-4">
                       <div>
                         <div className="flex items-center space-x-2">
-                          <div className="text-sm font-medium text-gray-900">{order.order_number}</div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={order.order_number}>
+                            {order.order_number}
+                          </div>
                           {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
                               <Package className="h-3 w-3 mr-1" />
                               {order.order_items?.length || order.items?.length || 0} items
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
                               <AlertTriangle className="h-3 w-3 mr-1" />
                               No items
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500">{new Date(order.created_at).toLocaleString()}</div>
+                        <div className="text-sm text-gray-500 truncate" title={new Date(order.created_at).toLocaleString()}>
+                          {new Date(order.created_at).toLocaleString()}
+                        </div>
                         <div className="text-xs text-gray-400 mt-1">
                           <span className={`px-2 py-1 rounded-full ${
                             order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
@@ -1025,30 +1057,79 @@ const OrderHistory: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-48 px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
-                        {order.customer_name || 'Walk-in Customer'}
+                        <div 
+                          className="truncate font-medium" 
+                          title={order.customer_name || 'Walk-in Customer'}
+                          style={{ maxWidth: '100%' }}
+                        >
+                          {order.customer_name || 'Walk-in Customer'}
+                        </div>
+                        {order.customer_phone && (
+                          <div 
+                            className="text-xs text-gray-500 truncate mt-1" 
+                            title={order.customer_phone}
+                            style={{ maxWidth: '100%' }}
+                          >
+                            {order.customer_phone}
+                          </div>
+                        )}
+                        {order.special_instructions && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {order.special_instructions.length > 100 ? (
+                              <div>
+                                <div 
+                                  className="overflow-hidden" 
+                                  title={`Note: ${order.special_instructions}`}
+                                  style={{
+                                    display: expandedNotes.has(order.id) ? 'block' : '-webkit-box',
+                                    WebkitLineClamp: expandedNotes.has(order.id) ? 'unset' : 2,
+                                    WebkitBoxOrient: expandedNotes.has(order.id) ? 'unset' : 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    lineHeight: '1.2em',
+                                    maxHeight: expandedNotes.has(order.id) ? 'none' : '2.4em'
+                                  }}
+                                >
+                                  Note: {expandedNotes.has(order.id) 
+                                    ? order.special_instructions 
+                                    : order.special_instructions.substring(0, 100) + '...'
+                                  }
+                                </div>
+                                <button 
+                                  onClick={() => toggleNoteExpansion(order.id)}
+                                  className="text-blue-600 text-xs mt-1 cursor-pointer hover:text-blue-800 underline"
+                                  title={`${expandedNotes.has(order.id) ? 'Show less' : 'Show full note'}`}
+                                >
+                                  {expandedNotes.has(order.id) ? 'Show less' : 'Read more'}
+                                </button>
+                              </div>
+                            ) : (
+                              <div 
+                                className="truncate" 
+                                title={`Note: ${order.special_instructions}`}
+                              >
+                                Note: {order.special_instructions}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {order.customer_phone && (
-                        <div className="text-xs text-gray-500">{order.customer_phone}</div>
-                      )}
-                      {order.special_instructions && (
-                        <div className="text-xs text-gray-500 mt-1">Note: {order.special_instructions}</div>
-                      )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="w-64 px-6 py-4">
                       <div className="text-sm text-gray-900">
                         {order.order_items && order.order_items.length > 0 ? (
                           <div className="space-y-1" title={`${order.order_items.length} items in this order`}>
                             {order.order_items.slice(0, 2).map((item, index) => (
                               <div key={index} className="flex items-center space-x-2 group">
-                                <span className="text-gray-600">•</span>
-                                <span className="font-medium group-hover:text-blue-600 transition-colors">
+                                <span className="text-gray-600 flex-shrink-0">•</span>
+                                <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
                                   {item.menu_items?.name || item.menu_item?.name || 'Unknown Item'}
                                 </span>
-                                <span className="text-gray-500">x{item.quantity}</span>
+                                <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
                                 {item.unit_price && (
-                                  <span className="text-xs text-gray-400">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
+                                  <span className="text-xs text-gray-400 flex-shrink-0">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
                                 )}
                               </div>
                             ))}
@@ -1062,11 +1143,11 @@ const OrderHistory: React.FC = () => {
                           <div className="space-y-1" title={`${order.items.length} items in this order`}>
                             {order.items.slice(0, 2).map((item, index) => (
                               <div key={index} className="flex items-center space-x-2 group">
-                                <span className="text-gray-600">•</span>
-                                <span className="font-medium group-hover:text-blue-600 transition-colors">
+                                <span className="text-gray-600 flex-shrink-0">•</span>
+                                <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
                                   {item.menu_item?.name || 'Unknown Item'}
                                 </span>
-                                <span className="text-gray-500">x{item.quantity}</span>
+                                <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
                               </div>
                             ))}
                             {order.items.length > 2 && (
@@ -1077,34 +1158,36 @@ const OrderHistory: React.FC = () => {
                           </div>
                         ) : (
                           <div className="flex items-center space-x-2 text-gray-400" title="Click 'Refresh Items' to load order details">
-                            <Package className="h-4 w-4" />
+                            <Package className="h-4 w-4 flex-shrink-0" />
                             <span className="text-sm">No items found</span>
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-24 px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</div>
                       {order.payment_method && (
-                        <div className="text-xs text-gray-500">{order.payment_method}</div>
+                        <div className="text-xs text-gray-500 truncate" title={order.payment_method}>
+                          {order.payment_method}
+                        </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-32 px-6 py-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
                         {order.status}
                       </span>
                       {order.status === 'completed' && (
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-gray-500 mt-1 truncate" title={`Completed: ${new Date(order.updated_at).toLocaleString()}`}>
                           Completed: {new Date(order.updated_at).toLocaleString()}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-24 px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
                         {order.payment_status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="w-32 px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
                           <Eye className="h-4 w-4" />

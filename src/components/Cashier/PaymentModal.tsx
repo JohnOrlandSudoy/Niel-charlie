@@ -94,7 +94,7 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
       <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 id="payment-modal-title" className="text-xl font-semibold text-gray-900">
-            Payment Management - Order #{order.order_number}
+            Payment Management - Order #{order.customer_name}
           </h2>
           <button
             onClick={onClose}

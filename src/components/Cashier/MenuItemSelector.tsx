@@ -3,6 +3,7 @@ import { Plus, Search, Clock, AlertTriangle, CheckCircle, Package, Image as Imag
 import { MenuItem } from '../../types/menu';
 import { useMenuItemSelection } from '../../hooks/useMenuItemSelection';
 import { useInventoryStock } from '../../hooks/useInventoryStock';
+import { checkIngredientAvailability, getAvailabilityStatus } from '../../utils/ingredientAvailability';
 
 interface MenuItemSelectorProps {
   onAddToOrder: (menuItem: MenuItem, quantity: number, customizations?: string, specialInstructions?: string) => void;
@@ -12,27 +13,62 @@ interface MenuItemSelectorProps {
 const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToOrder, onClose }) => {
   // Use the custom hook for menu item management
   const {
-    menuItems,
     isLoading,
     error,
     searchQuery,
     setSearchQuery,
     filterCategory,
     setFilterCategory,
-    categories,
+    categoryData,
     imageErrors,
     filteredItems,
     fetchMenuItems,
     getImageUrl,
-    handleImageError,
-    getCategoryName
+    handleImageError
   } = useMenuItemSelection();
 
   // Use inventory stock checking
   const {
-    checkMenuItemStock,
-    isLoading: isStockLoading
+    checkMenuItemStock
   } = useInventoryStock();
+
+  // Filter out unavailable items (auto-hide items with missing ingredients)
+  const availableItems = useMemo(() => {
+    console.log('MenuItemSelector - Starting filtering process with items:', filteredItems.map(item => ({
+      name: item.name,
+      hasIngredients: !!item.ingredients,
+      ingredientsCount: item.ingredients?.length || 0,
+      isAvailable: item.is_available
+    })));
+    
+    const filtered = filteredItems.filter(item => {
+      // First check ingredient availability (matches MenuManagement logic)
+      const ingredientAvailability = checkIngredientAvailability(item);
+      
+      console.log(`Checking availability for "${item.name}":`, {
+        ingredientAvailability,
+        hasIngredients: !!item.ingredients,
+        ingredientsCount: item.ingredients?.length || 0
+      });
+      
+      // Debug logging for ingredient availability
+      if (!ingredientAvailability.isAvailable) {
+        console.log(`Hiding item "${item.name}" due to missing ingredients:`, {
+          missingCount: ingredientAvailability.missingCount,
+          missingIngredients: ingredientAvailability.missingIngredients.map(ing => ing.ingredient?.name || 'Unknown')
+        });
+        return false; // Hide items with missing ingredients
+      }
+      
+      // Then check stock status for additional validation
+      const stockStatus = checkMenuItemStock(item, 1);
+      console.log(`Stock status for "${item.name}":`, stockStatus);
+      return stockStatus.isAvailable; // Only show items that are available
+    });
+    
+    console.log(`MenuItemSelector filtering: ${filteredItems.length} total items, ${filtered.length} available items`);
+    return filtered;
+  }, [filteredItems, checkMenuItemStock]);
   
   // Selected item state
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -156,9 +192,9 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
                   aria-label="Filter by category"
                 >
                   <option value="all">All Categories</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>
-                      {getCategoryName(category)}
+                  {categoryData.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
                     </option>
                   ))}
                 </select>
@@ -166,12 +202,13 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
             </div>
           </div>
 
-          {/* Menu Items Grid */}
+          {/* Menu Items Grid - Only show available items */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" role="list" aria-label="Available menu items">
-            {filteredItems.map(item => {
+            {availableItems.map(item => {
               const imageUrl = getImageUrl(item);
               const hasImageError = imageErrors.has(item.id);
               const stockStatus = checkMenuItemStock(item);
+              const availabilityStatus = getAvailabilityStatus(item);
               const isDisabled = !stockStatus.isAvailable;
               
               return (
@@ -215,14 +252,8 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
                       ₱{item.price}
                     </div>
                     
-                    {/* Stock Status Badge */}
-                    {stockStatus.isOutOfStock && (
-                      <div className="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
-                        <XCircle className="h-3 w-3" />
-                        <span>Out of Stock</span>
-                      </div>
-                    )}
-                    {stockStatus.isLowStock && !stockStatus.isOutOfStock && (
+                    {/* Ingredient Availability Badge */}
+                    {availabilityStatus.status === 'low_stock' && (
                       <div className="absolute top-2 left-2 bg-amber-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
                         <AlertTriangle className="h-3 w-3" />
                         <span>Low Stock</span>
@@ -249,12 +280,7 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
                       )}
                       
                       <div className="flex items-center space-x-1">
-                        {stockStatus.isOutOfStock ? (
-                          <>
-                            <XCircle className="h-3 w-3 text-red-500" />
-                            <span className="text-red-600">Out of Stock</span>
-                          </>
-                        ) : stockStatus.isLowStock ? (
+                        {availabilityStatus.status === 'low_stock' ? (
                           <>
                             <AlertTriangle className="h-3 w-3 text-amber-500" />
                             <span className="text-amber-600">Low Stock</span>
@@ -273,11 +299,27 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
             })}
           </div>
 
-          {filteredItems.length === 0 && (
+          {availableItems.length === 0 && (
             <div className="text-center py-12">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No menu items found</p>
-              <p className="text-gray-400 mt-1">Try adjusting your search or filters</p>
+              <p className="text-gray-500 text-lg">No available menu items found</p>
+              <p className="text-gray-400 mt-1">
+                {filteredItems.length > 0 
+                  ? "All items are currently unavailable due to missing ingredients or low stock"
+                  : "Try adjusting your search or filters"
+                }
+              </p>
+              {filteredItems.length > 0 && (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-md mx-auto">
+                  <div className="flex items-center space-x-2 text-amber-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">Ingredient Availability Check Active</span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Items with missing ingredients are automatically hidden from the cashier interface.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -286,29 +328,44 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
             <div className="bg-gray-50 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Add to Order</h3>
               
-              {/* Stock Status Alert */}
+              {/* Ingredient Availability Alert */}
               {(() => {
-                const stockStatus = checkMenuItemStock(selectedItem, quantity);
-                if (stockStatus.isOutOfStock) {
+                const ingredientAvailability = checkIngredientAvailability(selectedItem);
+                
+                if (!ingredientAvailability.isAvailable) {
                   return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                       <div className="flex items-center space-x-2">
                         <XCircle className="h-5 w-5 text-red-600" />
                         <div>
-                          <h4 className="text-red-800 font-medium">Out of Stock</h4>
-                          <p className="text-red-700 text-sm">{stockStatus.stockMessage}</p>
+                          <h4 className="text-red-800 font-medium">Unavailable Due to Missing Ingredients</h4>
+                          <p className="text-red-700 text-sm">
+                            {ingredientAvailability.missingCount} ingredient(s) are out of stock
+                          </p>
+                          <div className="mt-2 text-xs text-red-600">
+                            Missing: {ingredientAvailability.missingIngredients.map(ing => 
+                              ing.ingredient?.name || 'Unknown'
+                            ).join(', ')}
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
-                } else if (stockStatus.isLowStock) {
+                } else if (ingredientAvailability.lowStockCount > 0) {
                   return (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                       <div className="flex items-center space-x-2">
                         <AlertTriangle className="h-5 w-5 text-amber-600" />
                         <div>
                           <h4 className="text-amber-800 font-medium">Low Stock Warning</h4>
-                          <p className="text-amber-700 text-sm">{stockStatus.stockMessage}</p>
+                          <p className="text-amber-700 text-sm">
+                            {ingredientAvailability.lowStockCount} ingredient(s) are running low
+                          </p>
+                          <div className="mt-2 text-xs text-amber-600">
+                            Low stock: {ingredientAvailability.lowStockIngredients.map(ing => 
+                              ing.ingredient?.name || 'Unknown'
+                            ).join(', ')}
+                          </div>
                         </div>
                       </div>
                     </div>

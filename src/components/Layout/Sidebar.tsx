@@ -28,12 +28,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange }) => {
   return (
     <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-xl flex flex-col">
       <div className="p-6 border-b border-gray-700">
-        <div className="flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
           <img 
             src="/logo.svg" 
             alt="Restaurant Logo" 
-            className="h-24 w-auto"
+            className="h-16 w-auto mb-3"
           />
+          <div className="text-center">
+            <div className="text-lg font-bold text-white">DONG G PASTILLAN</div>
+            <div className="text-xs text-gray-300 mt-1">Ordering Management System</div>
+          </div>
         </div>
       </div>
 

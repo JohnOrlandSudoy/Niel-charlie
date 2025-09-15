@@ -1,4 +1,5 @@
 // API utility functions for making authenticated requests
+import { offlineApiManager } from './offlineApiManager';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 
@@ -13,8 +14,17 @@ export const getUserData = () => {
   return userData ? JSON.parse(userData) : null;
 };
 
-// Make authenticated API request
+// Make authenticated API request (with offline support)
 export const apiRequest = async (
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  // Use offline API manager for automatic online/offline routing
+  return await offlineApiManager.request(endpoint, options);
+};
+
+// Legacy direct API request (for internal use)
+export const directApiRequest = async (
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> => {
