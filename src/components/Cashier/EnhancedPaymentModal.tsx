@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, CreditCard, DollarSign, CheckCircle, AlertTriangle, Loader2, Printer, Download, QrCode } from 'lucide-react';
 import { Order as ApiOrder } from '../../types/orders';
+import { Discount } from '../../types/discounts';
+import DiscountSelector from './DiscountSelector';
 import { usePaymentMethods } from '../../hooks/usePaymentMethods';
 import { usePayMongoPayment } from '../../hooks/usePayMongoPayment';
 import PayMongoPaymentModal from './PayMongoPaymentModal';
@@ -11,6 +13,7 @@ interface EnhancedPaymentModalProps {
   onClose: () => void;
   onPaymentComplete: (order: ApiOrder) => void;
   onReceiptGenerated: (receiptData: any) => void;
+  onApplyDiscount?: (orderId: string, discountCode: string) => Promise<any>;
 }
 
 interface PaymentData {
@@ -25,7 +28,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   isOpen,
   onClose,
   onPaymentComplete,
-  onReceiptGenerated
+  onReceiptGenerated,
+  onApplyDiscount
 }) => {
   const { paymentMethods, loading: isLoadingMethods } = usePaymentMethods();
   const {
@@ -50,6 +54,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
+  const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
 
   // Calculate totals - handle different possible field names and fallback calculation
   const calculateTotals = () => {
@@ -84,6 +90,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   // Debug logging
   console.log('EnhancedPaymentModal - Order data:', {
     order,
+    orderId: order.id,
+    orderNumber: order.order_number,
     subtotal,
     tax,
     total,
@@ -132,6 +140,25 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     }
   };
 
+  // Handle discount application
+  const handleApplyDiscount = useCallback(async (discount: Discount) => {
+    if (!discount || !onApplyDiscount) return;
+    
+    try {
+      setIsApplyingDiscount(true);
+      const result = await onApplyDiscount(order.id, discount.code);
+      if (result) {
+        // Discount applied successfully
+        console.log('Discount applied:', result);
+        setSelectedDiscount(discount);
+      }
+    } catch (error) {
+      console.error('Failed to apply discount:', error);
+    } finally {
+      setIsApplyingDiscount(false);
+    }
+  }, [onApplyDiscount, order.id]);
+
   const handleProcessPayment = async () => {
     if (!paymentData.paymentMethod) {
       setError('Please select a payment method');
@@ -174,8 +201,26 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setError(null);
 
       try {
-        // Simulate cash payment processing
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Debug logging
+        console.log('Processing cash payment for order:', {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          orderData: order
+        });
+
+        // Save payment to database using the API utility
+        const { api } = await import('../../utils/api');
+        const paymentResponse = await api.orders.updatePayment(order.id, {
+          payment_status: 'paid',
+          payment_method: 'cash'
+        });
+
+        if (!paymentResponse.ok) {
+          throw new Error(`Payment update failed: ${paymentResponse.statusText}`);
+        }
+
+        const paymentResult = await paymentResponse.json();
+        console.log('Payment saved to database:', paymentResult);
 
         // Generate receipt data for cash payment
         const receipt = {
@@ -185,7 +230,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           subtotal,
           tax,
           total,
-          paymentMethod: paymentData.paymentMethod,
+          paymentMethod: 'cash',
           amountPaid: paymentData.amountPaid,
           change: paymentData.change,
           isOfflineCash: paymentData.isOfflineCash
@@ -197,7 +242,13 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         setShowReceipt(true);
         onReceiptGenerated(receipt);
 
+        // Automatically print receipt
+        setTimeout(() => {
+          handlePrintReceipt();
+        }, 1000);
+
       } catch (err) {
+        console.error('Cash payment processing failed:', err);
         setError('Cash payment processing failed. Please try again.');
       } finally {
         setIsProcessing(false);
@@ -235,48 +286,87 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     }
   };
 
-  const handleFinalizeOrder = () => {
-    // Mark order as paid and finalized
-    const updatedOrder = {
-      ...order,
-      payment_status: 'paid' as const,
-      payment_method: paymentData.paymentMethod as 'paymongo' | 'cash' | 'gcash' | 'card',
-      amount_paid: paymentData.amountPaid,
-      change_given: paymentData.change,
-      finalized_at: new Date().toISOString()
-    };
+  const handleFinalizeOrder = async () => {
+    try {
+      // Ensure payment is saved to database before finalizing
+      if (receiptData && receiptData.paymentMethod === 'cash') {
+        const { api } = await import('../../utils/api');
+        const paymentResponse = await api.orders.updatePayment(order.id, {
+          payment_status: 'paid',
+          payment_method: 'cash'
+        });
 
-    onPaymentComplete(updatedOrder);
-    onClose();
+        if (!paymentResponse.ok) {
+          throw new Error(`Payment update failed: ${paymentResponse.statusText}`);
+        }
+
+        console.log('Payment finalized and saved to database');
+      }
+
+      // Mark order as paid and finalized
+      const updatedOrder = {
+        ...order,
+        payment_status: 'paid' as const,
+        payment_method: receiptData?.paymentMethod || 'cash',
+        amount_paid: receiptData?.amountPaid || paymentData.amountPaid,
+        change_given: receiptData?.change || paymentData.change,
+        finalized_at: new Date().toISOString()
+      };
+
+      onPaymentComplete(updatedOrder);
+      onClose();
+    } catch (err) {
+      console.error('Error finalizing order:', err);
+      setError('Failed to finalize order. Please try again.');
+    }
   };
 
   // Handle PayMongo payment completion
-  const handlePayMongoPaymentComplete = useCallback(() => {
+  const handlePayMongoPaymentComplete = useCallback(async () => {
     console.log('PayMongo payment completed, generating receipt...');
     
-    // Generate receipt for PayMongo payment
-    const receipt = {
-      orderNumber: order.order_number,
-      date: new Date().toISOString(),
-      items: (order as any).order_items || (order as any).items || [],
-      subtotal,
-      tax,
-      total,
-      paymentMethod: 'paymongo',
-      amountPaid: total, // PayMongo payments are exact amount
-      change: 0,
-      isOfflineCash: false,
-      paymentIntentId: paymentIntent?.paymentIntentId
-    };
-    
-    console.log('Generated PayMongo receipt:', receipt);
-    
-    setReceiptData(receipt);
-    setShowReceipt(true);
-    onReceiptGenerated(receipt);
-    
-    // Close PayMongo modal
-    closePayMongoModal();
+    try {
+      // Save PayMongo payment to database
+      const { api } = await import('../../utils/api');
+      const paymentResponse = await api.orders.updatePayment(order.id, {
+        payment_status: 'paid',
+        payment_method: 'paymongo'
+      });
+
+      if (!paymentResponse.ok) {
+        throw new Error(`Payment update failed: ${paymentResponse.statusText}`);
+      }
+
+      const paymentResult = await paymentResponse.json();
+      console.log('PayMongo payment saved to database:', paymentResult);
+      
+      // Generate receipt for PayMongo payment
+      const receipt = {
+        orderNumber: order.order_number,
+        date: new Date().toISOString(),
+        items: (order as any).order_items || (order as any).items || [],
+        subtotal,
+        tax,
+        total,
+        paymentMethod: 'paymongo',
+        amountPaid: total, // PayMongo payments are exact amount
+        change: 0,
+        isOfflineCash: false,
+        paymentIntentId: paymentIntent?.paymentIntentId
+      };
+      
+      console.log('Generated PayMongo receipt:', receipt);
+      
+      setReceiptData(receipt);
+      setShowReceipt(true);
+      onReceiptGenerated(receipt);
+      
+      // Close PayMongo modal
+      closePayMongoModal();
+    } catch (err) {
+      console.error('Error saving PayMongo payment:', err);
+      setError('Failed to save PayMongo payment. Please try again.');
+    }
   }, [order, subtotal, tax, total, paymentIntent, onReceiptGenerated, closePayMongoModal]);
 
   // Monitor PayMongo payment status
@@ -409,6 +499,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 )}
               </div>
 
+              {/* Discount Selector */}
+              {onApplyDiscount && (
+                <DiscountSelector
+                  orderAmount={total}
+                  onDiscountSelect={setSelectedDiscount}
+                  selectedDiscount={selectedDiscount}
+                  onApplyDiscount={handleApplyDiscount}
+                  isApplyingDiscount={isApplyingDiscount}
+                />
+              )}
+
               {/* Payment Method Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -455,45 +556,26 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Offline Payment Methods */}
+                    {/* Cash Payment Method */}
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                         <DollarSign className="h-4 w-4 mr-2 text-green-600" />
-                        Offline Payments
+                        Cash Payment
                       </h4>
                       <div className="grid grid-cols-1 gap-3">
-                        {paymentMethods.filter(method => !method.is_online).map((method) => (
-                          <button
-                            key={method.method_key}
-                            onClick={() => handlePaymentMethodChange(method.method_key)}
-                            className={`p-3 border-2 rounded-lg text-left transition-all duration-200 ${
-                              paymentData.paymentMethod === method.method_key
-                                ? 'border-green-500 bg-green-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <DollarSign className="h-4 w-4" />
-                              <span className="font-medium">{method.method_name}</span>
-                            </div>
-                            <p className="text-xs text-gray-600 mt-1">{method.method_description}</p>
-                          </button>
-                        ))}
-                        
-                        {/* Additional Offline Cash Option */}
                         <button
-                          onClick={() => handlePaymentMethodChange('cash_offline')}
+                          onClick={() => handlePaymentMethodChange('cash')}
                           className={`p-3 border-2 rounded-lg text-left transition-all duration-200 ${
-                            paymentData.paymentMethod === 'cash_offline'
+                            paymentData.paymentMethod === 'cash'
                               ? 'border-green-500 bg-green-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           <div className="flex items-center space-x-2">
                             <DollarSign className="h-4 w-4" />
-                            <span className="font-medium">Offline Cash</span>
+                            <span className="font-medium">Cash Payment</span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">Physical cash payment (separate from regular cash)</p>
+                          <p className="text-xs text-gray-600 mt-1">Physical cash payment with change calculation</p>
                         </button>
                       </div>
                     </div>
@@ -501,8 +583,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 )}
               </div>
 
-              {/* Payment Amount Input - Only for offline payments */}
-              {paymentData.paymentMethod && !paymentMethods.find(m => m.method_key === paymentData.paymentMethod)?.is_online && (
+              {/* Payment Amount Input - Only for cash payments */}
+              {paymentData.paymentMethod === 'cash' && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Amount Paid (₱)
@@ -532,17 +614,14 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               )}
 
               {/* Online Payment Info */}
-              {paymentData.paymentMethod && paymentMethods.find(m => m.method_key === paymentData.paymentMethod)?.is_online && (
+              {paymentData.paymentMethod === 'paymongo' && (
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <QrCode className="h-5 w-5 text-blue-600" />
                     <span className="text-blue-800 font-medium">Online Payment Selected</span>
                   </div>
                   <p className="text-blue-700 text-sm mt-1">
-                    {paymentData.paymentMethod === 'paymongo' 
-                      ? 'QR code will be generated for customer to scan and pay online'
-                      : 'This payment method will be processed online'
-                    }
+                    QR code will be generated for customer to scan and pay online (GCash, GrabPay, Maya, QR Ph)
                   </p>
                 </div>
               )}
@@ -564,9 +643,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   disabled={
                     isProcessing || 
                     !paymentData.paymentMethod || 
-                    (paymentData.paymentMethod !== 'paymongo' && 
-                     !paymentMethods.find(m => m.method_key === paymentData.paymentMethod)?.is_online && 
-                     paymentData.amountPaid < total)
+                    (paymentData.paymentMethod === 'cash' && paymentData.amountPaid < total)
                   }
                   className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                     paymentData.paymentMethod === 'paymongo' 

@@ -10,6 +10,7 @@ import {
   PayMongoPaymentUpdate
 } from '../types/paymongo';
 import { Order as ApiOrder } from '../types/orders';
+import { payMongoWebhookHandler, WebhookEventHandler } from '../utils/paymongoWebhookHandler';
 
 export const usePayMongoPayment = () => {
   const [paymentIntent, setPaymentIntent] = useState<PayMongoPaymentIntent | null>(null);
@@ -22,6 +23,72 @@ export const usePayMongoPayment = () => {
   
   const statusCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const currentOrder = useRef<ApiOrder | null>(null);
+
+  // Webhook event handler
+  const webhookEventHandler: WebhookEventHandler = useRef({
+    onPaymentPaid: (orderId: string, orderNumber: string, paymentData: any) => {
+      console.log(`Webhook: Payment succeeded for order ${orderNumber} (${orderId})`, paymentData);
+      
+      // Stop status checking since webhook confirmed payment
+      if (statusCheckInterval.current) {
+        clearInterval(statusCheckInterval.current);
+        statusCheckInterval.current = null;
+      }
+      
+      // Update payment intent status
+      setPaymentIntent(prev => prev ? { ...prev, status: 'succeeded' } : null);
+      
+      // Close modal and reset state
+      setShowPayMongoModal(false);
+      setPaymentIntent(null);
+      currentOrder.current = null;
+    },
+    
+    onPaymentFailed: (orderId: string, orderNumber: string, errorData: any) => {
+      console.log(`Webhook: Payment failed for order ${orderNumber} (${orderId})`, errorData);
+      
+      // Stop status checking
+      if (statusCheckInterval.current) {
+        clearInterval(statusCheckInterval.current);
+        statusCheckInterval.current = null;
+      }
+      
+      // Update payment intent status
+      setPaymentIntent(prev => prev ? { ...prev, status: 'failed' } : null);
+      
+      // Set error message
+      setError(`Payment failed: ${errorData.failedMessage || 'Unknown error'}`);
+    },
+    
+    onPaymentCancelled: (orderId: string, orderNumber: string) => {
+      console.log(`Webhook: Payment cancelled for order ${orderNumber} (${orderId})`);
+      
+      // Stop status checking
+      if (statusCheckInterval.current) {
+        clearInterval(statusCheckInterval.current);
+        statusCheckInterval.current = null;
+      }
+      
+      // Update payment intent status
+      setPaymentIntent(prev => prev ? { ...prev, status: 'cancelled' } : null);
+    },
+    
+    onPaymentExpired: (orderId: string, orderNumber: string) => {
+      console.log(`Webhook: Payment expired for order ${orderNumber} (${orderId})`);
+      
+      // Stop status checking
+      if (statusCheckInterval.current) {
+        clearInterval(statusCheckInterval.current);
+        statusCheckInterval.current = null;
+      }
+      
+      // Update payment intent status
+      setPaymentIntent(prev => prev ? { ...prev, status: 'awaiting_payment_method' } : null);
+      
+      // Set error message
+      setError('Payment session expired. Please create a new payment.');
+    }
+  }).current;
 
   // Create PayMongo payment intent
   const createPaymentIntent = useCallback(async (order: ApiOrder): Promise<PayMongoPaymentIntent | null> => {
@@ -48,8 +115,8 @@ export const usePayMongoPayment = () => {
       setPaymentIntent(result.data);
       setShowPayMongoModal(true);
       
-      // Start status checking using order ID
-      startStatusChecking(order.id);
+      // Start status checking using payment intent ID
+      startStatusChecking(result.data.paymentIntentId);
       
       return result.data;
     } catch (err) {
@@ -62,11 +129,11 @@ export const usePayMongoPayment = () => {
   }, []);
 
   // Check payment status
-  const checkPaymentStatus = useCallback(async (orderId: string): Promise<PayMongoPaymentStatus | null> => {
+  const checkPaymentStatus = useCallback(async (paymentIntentId: string): Promise<PayMongoPaymentStatus | null> => {
     try {
       setIsCheckingStatus(true);
       
-      const response = await api.payments.getStatus(orderId);
+      const response = await api.payments.getStatus(paymentIntentId);
       const result = await response.json();
 
       if (!result.success || !result.data) {
@@ -214,7 +281,7 @@ export const usePayMongoPayment = () => {
   }, []);
 
   // Start automatic status checking
-  const startStatusChecking = useCallback((orderId: string) => {
+  const startStatusChecking = useCallback((paymentIntentId: string) => {
     // Clear any existing interval
     if (statusCheckInterval.current) {
       clearInterval(statusCheckInterval.current);
@@ -222,7 +289,7 @@ export const usePayMongoPayment = () => {
 
     // Check status every 3 seconds
     statusCheckInterval.current = setInterval(async () => {
-      const status = await checkPaymentStatus(orderId);
+      const status = await checkPaymentStatus(paymentIntentId);
       
       if (status === 'succeeded' && currentOrder.current) {
         // Payment succeeded, update order
@@ -261,13 +328,24 @@ export const usePayMongoPayment = () => {
     currentOrder.current = null;
   }, [stopStatusChecking]);
 
-  // Cleanup on unmount
+  // Register webhook handler and cleanup on unmount
   useEffect(() => {
+    // Register webhook event handler
+    payMongoWebhookHandler.registerHandler(webhookEventHandler);
+    
     return () => {
+      // Cleanup
       if (statusCheckInterval.current) {
         clearInterval(statusCheckInterval.current);
       }
+      // Unregister webhook event handler
+      payMongoWebhookHandler.unregisterHandler(webhookEventHandler);
     };
+  }, [webhookEventHandler]);
+
+  // Simulate webhook event (for testing)
+  const simulateWebhookEvent = useCallback((eventType: 'payment.paid' | 'payment.failed' | 'payment_intent.cancelled' | 'qrph.expired', orderId: string, orderNumber: string, additionalData: any = {}) => {
+    return payMongoWebhookHandler.simulateWebhookEvent(eventType, orderId, orderNumber, additionalData);
   }, []);
 
   return {
@@ -282,7 +360,10 @@ export const usePayMongoPayment = () => {
     checkPaymentStatus,
     cancelPayment,
     updateOrderPayment,
+    startStatusChecking,
+    stopStatusChecking,
     closePayMongoModal,
-    setError
+    setError,
+    simulateWebhookEvent
   };
 };

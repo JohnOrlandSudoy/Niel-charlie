@@ -22,7 +22,7 @@ const AdminLayout: React.FC = () => {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigateToInventory={() => setCurrentPage('inventory')} />;
       case 'inventory':
         return <InventoryManagement />;
       case 'menu':

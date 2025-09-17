@@ -1,73 +1,52 @@
- import React, { useCallback, useMemo, useState } from 'react';
-import { X, Save, Smartphone, CreditCard, QrCode } from 'lucide-react';
+ import React, { useCallback, useMemo } from 'react';
+import { X, Save } from 'lucide-react';
 import { Order as ApiOrder } from '../../types/orders';
-import { Discount } from '../../types/discounts';
-import DiscountSelector from './DiscountSelector';
-import { usePaymentMethods } from '../../hooks/usePaymentMethods';
 
 interface PaymentModalProps {
   order: ApiOrder;
   paymentForm: {
     payment_status: 'unpaid' | 'paid' | 'refunded';
-    payment_method: 'cash' | 'gcash' | 'card' | 'paymongo';
+    payment_method: 'cash' | 'paymongo';
   };
-  setPaymentForm: (form: any) => void;
   isUpdatingPayment: boolean;
-  isApplyingDiscount: boolean;
   onClose: () => void;
   onUpdatePayment: (orderId: string, paymentData: any) => void;
-  onApplyDiscount: (orderId: string, discountCode: string) => Promise<any>;
-  onPayMongoPayment?: (order: ApiOrder) => void;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
   order,
   paymentForm,
-  setPaymentForm,
   isUpdatingPayment,
-  isApplyingDiscount,
   onClose,
-  onUpdatePayment,
-  onApplyDiscount,
-  onPayMongoPayment
+  onUpdatePayment
 }) => {
-  const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
-  const { paymentMethods, loading: loadingPaymentMethods, error: paymentMethodsError } = usePaymentMethods();
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    const paymentData = {
-      ...paymentForm,
-      discount_id: selectedDiscount?.id || null
-    };
-    onUpdatePayment(order.id, paymentData);
-  }, [order.id, paymentForm, selectedDiscount, onUpdatePayment]);
-
-  const handlePayMongoPayment = useCallback(() => {
-    if (onPayMongoPayment) {
-      onPayMongoPayment(order);
-    }
-  }, [onPayMongoPayment, order]);
-
-  // Handle discount application
-  const handleApplyDiscount = useCallback(async (discount: Discount) => {
-    if (!discount) return;
+  const handleSubmit = useCallback(async () => {
     
     try {
-      const result = await onApplyDiscount(order.id, discount.code);
-      if (result) {
-        // Discount applied successfully
-        console.log('Discount applied:', result);
-        // You could show a success message here
-      }
-    } catch (error) {
-      console.error('Failed to apply discount:', error);
-    }
-  }, [onApplyDiscount, order.id]);
+      // Use the API utility for proper authentication and base URL
+      const { api } = await import('../../utils/api');
+      const response = await api.orders.updatePayment(order.id, {
+        payment_status: paymentForm.payment_status,
+        payment_method: paymentForm.payment_method
+      });
 
-  const handleInputChange = useCallback((field: string, value: any) => {
-    setPaymentForm((prev: any) => ({ ...prev, [field]: value }));
-  }, [setPaymentForm]);
+      if (!response.ok) {
+        throw new Error(`Payment update failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Payment updated successfully:', result);
+      
+      // Call the original handler for UI updates
+      onUpdatePayment(order.id, paymentForm);
+    } catch (err) {
+      console.error('Error updating payment:', err);
+      // Still call the original handler for error handling
+      onUpdatePayment(order.id, paymentForm);
+    }
+  }, [order.id, paymentForm, onUpdatePayment]);
+
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -129,153 +108,37 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
             </div>
           </div>
 
-          {/* Payment Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="payment-status">
-                    Payment Status *
-                  </label>
-                  <select
-                    id="payment-status"
-                    value={paymentForm.payment_status}
-                    onChange={(e) => handleInputChange('payment_status', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    required
-                    aria-label="Payment status"
-                  >
-                    <option value="unpaid">Unpaid</option>
-                    <option value="paid">Paid</option>
-                    <option value="refunded">Refunded</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="payment-method">
-                    Payment Method
-                  </label>
-                  {loadingPaymentMethods ? (
-                    <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                      <span className="text-gray-600">Loading payment methods...</span>
-                    </div>
-                  ) : paymentMethodsError ? (
-                    <div className="w-full border border-red-300 rounded-lg px-3 py-2 bg-red-50 text-red-600">
-                      Error loading payment methods
-                    </div>
-                  ) : (
-                    <select
-                      id="payment-method"
-                      value={paymentForm.payment_method}
-                      onChange={(e) => handleInputChange('payment_method', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                      aria-label="Payment method"
-                    >
-                      {paymentMethods.length === 0 ? (
-                        <option value="" disabled>No payment methods available</option>
-                      ) : (
-                        paymentMethods
-                          .sort((a, b) => a.display_order - b.display_order)
-                          .map((method) => (
-                            <option key={method.method_key} value={method.method_key}>
-                              {method.method_name}
-                            </option>
-                          ))
-                      )}
-                    </select>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Discount Selector */}
-            <DiscountSelector
-              orderAmount={order.total_amount}
-              onDiscountSelect={setSelectedDiscount}
-              selectedDiscount={selectedDiscount}
-              onApplyDiscount={handleApplyDiscount}
-              isApplyingDiscount={isApplyingDiscount}
-            />
-
-            {/* PayMongo Payment Button */}
-            {paymentForm.payment_method === 'paymongo' && paymentForm.payment_status === 'unpaid' && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium text-blue-900 mb-1">PayMongo Online Payment</h4>
-                    <p className="text-sm text-blue-700">
-                      Generate a QR code for the customer to scan and pay online
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handlePayMongoPayment}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-label="Create PayMongo payment"
-                  >
-                    <QrCode className="h-4 w-4" aria-hidden="true" />
-                    <span>Create QR Payment</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-
-            {/* Payment Method Info */}
-            {paymentForm.payment_method === 'paymongo' && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                <h4 className="font-medium text-gray-900 mb-3">PayMongo Payment Methods</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <Smartphone className="h-4 w-4 text-gray-600" />
-                    <span className="text-gray-700">GCash</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CreditCard className="h-4 w-4 text-gray-600" />
-                    <span className="text-gray-700">Credit/Debit Cards</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <QrCode className="h-4 w-4 text-gray-600" />
-                    <span className="text-gray-700">Bank QR Codes</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isUpdatingPayment}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                aria-label="Cancel payment update"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isUpdatingPayment}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-500"
-                aria-label="Update payment status"
-              >
-                {isUpdatingPayment ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
-                    <span>Updating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" aria-hidden="true" />
-                    <span>Update Payment</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isUpdatingPayment}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              aria-label="Cancel payment update"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isUpdatingPayment}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-500"
+              aria-label="Update payment status"
+            >
+              {isUpdatingPayment ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
+                  <span>Updating...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                  <span>Update Payment</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

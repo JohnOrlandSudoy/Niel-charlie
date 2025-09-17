@@ -23,7 +23,7 @@ import { useOrderItems } from '../../hooks/useOrderItems';
 import { usePaymentManagement } from '../../hooks/usePaymentManagement';
 import { useInventoryStock } from '../../hooks/useInventoryStock';
 import { usePayMongoPayment } from '../../hooks/usePayMongoPayment';
-import { Order as ApiOrder } from '../../types/orders';
+import { Order as ApiOrder, OrderIngredientValidationResponse } from '../../types/orders';
 
 const CashierDashboard: React.FC = React.memo(() => {
   const { user } = useAuth();
@@ -62,13 +62,10 @@ const CashierDashboard: React.FC = React.memo(() => {
   const {
     showPaymentModal,
     isUpdatingPayment,
-    isApplyingDiscount,
     paymentForm,
-    setPaymentForm,
     handleUpdatePayment,
     handleOpenPaymentModal,
     handleClosePaymentModal,
-    applyDiscountToOrder
   } = usePaymentManagement();
 
   // Use inventory stock checking for alerts
@@ -81,7 +78,6 @@ const CashierDashboard: React.FC = React.memo(() => {
     isCancelling,
     error: payMongoError,
     showPayMongoModal,
-    createPaymentIntent,
     cancelPayment,
     closePayMongoModal
   } = usePayMongoPayment();
@@ -95,6 +91,7 @@ const CashierDashboard: React.FC = React.memo(() => {
   const handleViewOrderDetails = useCallback(async (order: ApiOrder) => {
     setSelectedOrder(order);
     setShowOrderDetails(true);
+    // Always fetch fresh order items from database
     await fetchOrderItems(order.id);
   }, [fetchOrderItems]);
 
@@ -148,41 +145,26 @@ const CashierDashboard: React.FC = React.memo(() => {
     handleOpenPaymentModal(order);
   }, [handleOpenPaymentModal]);
 
-  // Enhanced apply discount with order list update
-  const handleApplyDiscountEnhanced = useCallback(async (orderId: string, discountCode: string) => {
-    const result = await applyDiscountToOrder(orderId, discountCode);
-    if (result) {
-      // Update the order in the orders list with the new discount information
-      setOrders(prev => prev.map(order => 
-        order.id === orderId 
-          ? { 
-              ...order, 
-              total_amount: order.total_amount - result.discount_amount,
-              discount_applied: result.discount,
-              discount_amount: result.discount_amount
-            } 
-          : order
-      ));
+  // Validate order ingredients using new API endpoint
+  const validateOrderIngredients = useCallback(async (orderId: string): Promise<OrderIngredientValidationResponse | null> => {
+    try {
+      const { api } = await import('../../utils/api');
+      const response = await api.orders.getOrderIngredientValidation(orderId);
+      const result = await response.json();
       
-      // Update selected order if it's the same
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(prev => prev ? {
-          ...prev,
-          total_amount: prev.total_amount - result.discount_amount,
-          discount_applied: result.discount,
-          discount_amount: result.discount_amount
-        } : null);
+      if (result.success && result.data) {
+        return result.data;
+      } else {
+        console.error('Failed to validate order ingredients:', result.message);
+        return null;
       }
-      
-      return result;
+    } catch (error) {
+      console.error('Error validating order ingredients:', error);
+      return null;
     }
-    return null;
-  }, [applyDiscountToOrder, selectedOrder, setOrders]);
+  }, []);
 
-  // Handle PayMongo payment
-  const handlePayMongoPayment = useCallback(async (order: ApiOrder) => {
-    await createPaymentIntent(order);
-  }, [createPaymentIntent]);
+
 
   // Handle PayMongo payment cancellation
   const handlePayMongoCancel = useCallback(async () => {
@@ -200,6 +182,18 @@ const CashierDashboard: React.FC = React.memo(() => {
     }, 300);
     return () => clearTimeout(timeoutId);
   }, [searchOrders]);
+
+  // Calculate order totals from order items (for display purposes)
+  const calculateOrderTotal = useCallback((order: ApiOrder) => {
+    // If order has items, calculate from items
+    if ((order as any).order_items && (order as any).order_items.length > 0) {
+      const subtotal = (order as any).order_items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+      const tax = subtotal * 0.12; // 12% VAT
+      return subtotal + tax;
+    }
+    // Otherwise use the order's total_amount
+    return order.total_amount || 0;
+  }, []);
 
   // Filter orders (client-side filtering for status)
   const finalFilteredOrders = useMemo(() => {
@@ -413,12 +407,29 @@ const CashierDashboard: React.FC = React.memo(() => {
                     <div className="mt-2 flex items-center space-x-6 text-sm text-gray-500">
                       <span>Type: {order.order_type.replace('_', ' ').toUpperCase()}</span>
                       {order.table_number && <span>Table: {order.table_number}</span>}
-                      <span>Total: ₱{order.total_amount.toFixed(2)}</span>
+                      <span>Total: ₱{calculateOrderTotal(order).toFixed(2)}</span>
                       {order.discount_applied && (
                         <span className="text-green-600 font-medium">
                           Discount: {order.discount_applied.code} (-₱{order.discount_amount?.toFixed(2) || '0.00'})
                         </span>
                       )}
+                      {/* Ingredient Status Indicator */}
+                      {(() => {
+                        const orderItems = (order as any).order_items || order.items || [];
+                        const hasLowStock = orderItems.some((item: any) => 
+                          item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'low_stock')
+                        );
+                        const hasOutOfStock = orderItems.some((item: any) => 
+                          item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'out_of_stock')
+                        );
+                        
+                        if (hasOutOfStock) {
+                          return <span className="text-red-600 font-medium">⚠️ Out of Stock Items</span>;
+                        } else if (hasLowStock) {
+                          return <span className="text-amber-600 font-medium">⚠️ Low Stock Items</span>;
+                        }
+                        return null;
+                      })()}
                       <span>Created: {new Date(order.created_at).toLocaleString()}</span>
             </div>
                   </div>
@@ -433,18 +444,49 @@ const CashierDashboard: React.FC = React.memo(() => {
                       <span>View Details</span>
                     </button>
                     
-                      <button 
-                      onClick={() => handleOpenPaymentModalEnhanced(order)}
-                      className={`px-3 py-1 text-xs font-medium border rounded flex items-center space-x-1 focus:outline-none focus:ring-2 transition-colors duration-200 ${
-                        order.payment_status === 'paid' 
-                          ? 'text-blue-600 hover:text-blue-700 border-blue-300 hover:bg-blue-50 focus:ring-blue-500' 
-                          : 'text-green-600 hover:text-green-700 border-green-300 hover:bg-green-50 focus:ring-green-500'
-                      }`}
-                      aria-label={`${order.payment_status === 'paid' ? 'Update payment for' : 'Process payment for'} order ${order.order_number}`}
+                    {/* Validate Ingredients Button */}
+                    <button 
+                      onClick={async () => {
+                        const validation = await validateOrderIngredients(order.id);
+                        if (validation) {
+                          const { overall_validation, ingredient_summary } = validation;
+                          let message = `Order ${order.order_number} Ingredient Validation:\n\n`;
+                          message += `Overall Status: ${overall_validation.all_items_available ? 'All Available' : 'Some Issues'}\n`;
+                          message += `Total Items: ${overall_validation.total_items}\n`;
+                          message += `Available Items: ${overall_validation.available_items}\n`;
+                          message += `Unavailable Items: ${overall_validation.unavailable_items}\n\n`;
+                          message += `Ingredient Summary:\n`;
+                          message += `- Unavailable: ${ingredient_summary.total_unavailable_ingredients}\n`;
+                          message += `- Low Stock: ${ingredient_summary.total_low_stock_ingredients}\n`;
+                          message += `- Sufficient: ${ingredient_summary.total_sufficient_ingredients}\n`;
+                          message += `- Total: ${ingredient_summary.total_ingredients}`;
+                          alert(message);
+                        } else {
+                          alert('Failed to validate order ingredients. Please try again.');
+                        }
+                      }}
+                      className="px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-700 border border-purple-300 rounded hover:bg-purple-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      aria-label={`Validate ingredients for order ${order.order_number}`}
                     >
-                      <CreditCard className="h-3 w-3" aria-hidden="true" />
-                      <span>{order.payment_status === 'paid' ? 'Update Payment' : 'Payment'}</span>
-                      </button>
+                      <Package className="h-3 w-3" aria-hidden="true" />
+                      <span>Validate</span>
+                    </button>
+                    
+                      {/* Only show payment button if order is not completed */}
+                      {order.status !== 'completed' && (
+                        <button 
+                        onClick={() => handleOpenPaymentModalEnhanced(order)}
+                        className={`px-3 py-1 text-xs font-medium border rounded flex items-center space-x-1 focus:outline-none focus:ring-2 transition-colors duration-200 ${
+                          order.payment_status === 'paid' 
+                            ? 'text-blue-600 hover:text-blue-700 border-blue-300 hover:bg-blue-50 focus:ring-blue-500' 
+                            : 'text-green-600 hover:text-green-700 border-green-300 hover:bg-green-50 focus:ring-green-500'
+                        }`}
+                        aria-label={`${order.payment_status === 'paid' ? 'Update payment for' : 'Process payment for'} order ${order.order_number}`}
+                      >
+                        <CreditCard className="h-3 w-3" aria-hidden="true" />
+                        <span>{order.payment_status === 'paid' ? 'Update Payment' : 'Payment'}</span>
+                        </button>
+                      )}
                   </div>
                 </div>
               </div>
@@ -493,13 +535,9 @@ const CashierDashboard: React.FC = React.memo(() => {
         <PaymentModal
           order={selectedOrder}
           paymentForm={paymentForm}
-          setPaymentForm={setPaymentForm}
           isUpdatingPayment={isUpdatingPayment}
-          isApplyingDiscount={isApplyingDiscount}
           onClose={handleClosePaymentModal}
           onUpdatePayment={handleUpdatePaymentEnhanced}
-          onApplyDiscount={handleApplyDiscountEnhanced}
-          onPayMongoPayment={handlePayMongoPayment}
         />
       )}
 

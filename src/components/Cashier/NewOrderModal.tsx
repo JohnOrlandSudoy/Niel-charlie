@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { X, Plus, Trash2, Save, User, Phone, MapPin, Clock, MessageSquare, AlertTriangle, XCircle, CreditCard, QrCode } from 'lucide-react';
+import { X, Plus, Trash2, Save, User, Phone, Clock, MessageSquare, AlertTriangle, XCircle, CreditCard, QrCode } from 'lucide-react';
 import { api } from '../../utils/api';
-import { CreateOrderRequest, AddOrderItemRequest, Order, MenuItem, ApiResponse } from '../../types/orders';
+import { CreateOrderRequest, AddOrderItemRequest, Order, ApiResponse } from '../../types/orders';
+import { MenuItem } from '../../types/menu';
 import MenuItemSelector from './MenuItemSelector';
 import PaymentModal from './PaymentModal';
 import EnhancedPaymentModal from './EnhancedPaymentModal';
@@ -9,6 +10,9 @@ import { useInventoryStock } from '../../hooks/useInventoryStock';
 import { checkIngredientAvailability, isMenuItemAvailableForOrder } from '../../utils/ingredientAvailability';
 import { usePayMongoPayment } from '../../hooks/usePayMongoPayment';
 import PayMongoPaymentModal from './PayMongoPaymentModal';
+import PayMongoWebhookTest from './PayMongoWebhookTest';
+import { debugOrderCreation, simulateOrderCreation, debugApiResponse } from '../../utils/orderDebug';
+import { OrderIngredientValidationResponse } from '../../types/orders';
 
 interface NewOrderModalProps {
   onClose: () => void;
@@ -42,12 +46,12 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showEnhancedPaymentModal, setShowEnhancedPaymentModal] = useState(false);
   const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(false);
+  const [showWebhookTest, setShowWebhookTest] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     payment_status: 'unpaid' as 'unpaid' | 'paid' | 'refunded',
-    payment_method: 'cash' as 'cash' | 'gcash' | 'card' | 'paymongo'
+    payment_method: 'cash' as 'cash' | 'paymongo'
   });
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
-  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
 
   // Use inventory stock checking
   const { checkOrderStock } = useInventoryStock();
@@ -55,15 +59,13 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
   // Use PayMongo payment hook
   const {
     paymentIntent,
-    isCreatingPayment,
     isCheckingStatus,
     isCancelling,
     error: payMongoError,
     showPayMongoModal,
     createPaymentIntent,
     cancelPayment,
-    closePayMongoModal,
-    setError: setPayMongoError
+    closePayMongoModal
   } = usePayMongoPayment();
 
   // Calculate totals with memoization
@@ -111,7 +113,28 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
     }
   }, [onClose]);
 
+  // Validate order ingredients using new API endpoint
+  const validateOrderIngredients = useCallback(async (orderId: string): Promise<OrderIngredientValidationResponse | null> => {
+    try {
+      const response = await api.orders.getOrderIngredientValidation(orderId);
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        return result.data;
+      } else {
+        console.error('Failed to validate order ingredients:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error validating order ingredients:', error);
+      return null;
+    }
+  }, []);
+
   const handleCreateOrder = async () => {
+    // Debug: Start order creation process
+    debugOrderCreation('Starting order creation', { orderData, orderItems });
+    
     if (orderItems.length === 0) {
       setError('Please add at least one item to the order');
       return;
@@ -121,6 +144,10 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
       setError('Table number is required for dine-in orders');
       return;
     }
+
+    // Debug: Simulate order creation to validate data (for logging only)
+    await simulateOrderCreation(orderData, orderItems);
+    // Note: We don't block order creation based on simulation validation
 
     // Check ingredient availability for all items
     const ingredientCheck = orderItems.every(item => {
@@ -196,11 +223,11 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
         throw new Error('Table number is required for dine-in orders');
       }
       
-      console.log('Creating order with cleaned data:', cleanedOrderData);
-      console.log('Auth token present:', !!token);
+      debugOrderCreation('Creating order with cleaned data', cleanedOrderData);
+      debugOrderCreation('Auth token present', !!token);
+      
       const orderResponse = await api.orders.create(cleanedOrderData);
-      console.log('Order response status:', orderResponse.status);
-      console.log('Order response headers:', orderResponse.headers);
+      debugOrderCreation('Order response status', orderResponse.status);
       
       // Check if the response is ok
       if (!orderResponse.ok) {
@@ -213,16 +240,15 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
       }
       
       const orderResult: ApiResponse<Order> = await orderResponse.json();
-      console.log('Order result:', orderResult);
+      debugApiResponse('Order Creation', orderResult);
 
       if (!orderResult.success || !orderResult.data) {
         console.error('Order creation failed:', {
           success: orderResult.success,
           message: orderResult.message,
-          error: orderResult.error,
           data: orderResult.data
         });
-        throw new Error(orderResult.message || orderResult.error || 'Failed to create order');
+        throw new Error(orderResult.message || 'Failed to create order');
       }
 
       const createdOrder = orderResult.data;
@@ -231,20 +257,56 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
       // Step 2: Add items to the order
       let itemsAddedSuccessfully = 0;
+      const addedOrderItems: any[] = [];
+      
       for (const item of orderItems) {
+        // Parse customizations string into object format as expected by API
+        let customizationsObj = undefined;
+        if (item.customizations && item.customizations.trim()) {
+          try {
+            // Try to parse as JSON if it's already an object string
+            customizationsObj = JSON.parse(item.customizations);
+          } catch {
+            // If not JSON, create a structured object from the string
+            customizationsObj = {
+              notes: item.customizations.trim()
+            };
+          }
+        }
+
         const itemData: AddOrderItemRequest = {
           menu_item_id: item.menuItem.id,
           quantity: item.quantity,
-          customizations: item.customizations || undefined,
+          customizations: customizationsObj,
           special_instructions: item.specialInstructions || undefined
         };
 
-        console.log('Adding item to order:', itemData);
+        debugOrderCreation('Adding item to order', itemData);
         const itemResponse = await api.orders.addItem(createdOrder.id, itemData);
         const itemResult: ApiResponse<any> = await itemResponse.json();
+        debugApiResponse('Add Order Item', itemResult);
 
-        if (itemResult.success) {
+        if (itemResult.success && itemResult.data) {
           itemsAddedSuccessfully++;
+          addedOrderItems.push(itemResult.data);
+          debugOrderCreation('Item added successfully', itemResult.data);
+          
+          // Log ingredient information if available
+          if (itemResult.data.menu_item?.ingredients) {
+            console.log(`Ingredient details for ${itemResult.data.menu_item.name}:`, {
+              itemName: itemResult.data.menu_item.name,
+              quantity: itemResult.data.quantity,
+              ingredients: itemResult.data.menu_item.ingredients.map((ing: any) => ({
+                name: ing.name,
+                required: ing.quantity_required,
+                unit: ing.unit,
+                currentStock: ing.current_stock,
+                stockStatus: ing.stock_status,
+                totalRequired: ing.total_required_for_order,
+                isOptional: ing.is_optional
+              }))
+            });
+          }
         } else {
           console.error('Failed to add item:', itemResult.message);
           // Continue with other items even if one fails
@@ -253,32 +315,46 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
       console.log(`Successfully added ${itemsAddedSuccessfully} out of ${orderItems.length} items`);
 
-      // Step 3: Create updated order with correct totals and items
+      // Step 3: Validate order ingredients using new API endpoint
+      console.log('Validating order ingredients...');
+      const ingredientValidation = await validateOrderIngredients(createdOrder.id);
+      
+      if (ingredientValidation) {
+        console.log('Ingredient validation result:', ingredientValidation);
+        
+        // Show warning if there are ingredient issues
+        if (!ingredientValidation.overall_validation.all_items_available) {
+          const unavailableCount = ingredientValidation.overall_validation.unavailable_items;
+          const lowStockCount = ingredientValidation.ingredient_summary.total_low_stock_ingredients;
+          
+          let warningMessage = `Order created but with ingredient issues:\n`;
+          if (unavailableCount > 0) {
+            warningMessage += `- ${unavailableCount} item(s) are unavailable due to missing ingredients\n`;
+          }
+          if (lowStockCount > 0) {
+            warningMessage += `- ${lowStockCount} ingredient(s) are running low on stock\n`;
+          }
+          warningMessage += `\nPlease check the order details for more information.`;
+          
+          alert(warningMessage);
+        } else if (ingredientValidation.overall_validation.has_low_stock_items) {
+          const lowStockCount = ingredientValidation.ingredient_summary.total_low_stock_ingredients;
+          alert(`Order created successfully, but ${lowStockCount} ingredient(s) are running low on stock.`);
+        }
+      }
+
+      // Step 4: Create updated order with correct totals and actual order items from database
       const updatedOrder: Order = {
         ...createdOrder,
         subtotal: subtotal,
         tax_amount: tax,
         total_amount: total,
-        order_items: orderItems.map(item => ({
-          id: `temp-${item.menuItem.id}-${Date.now()}`, // Temporary ID
-          menu_item_id: item.menuItem.id,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.totalPrice,
-          customizations: item.customizations,
-          special_instructions: item.specialInstructions,
-          menu_items: {
-            id: item.menuItem.id,
-            name: item.menuItem.name,
-            price: item.menuItem.price,
-            description: item.menuItem.description
-          }
-        }))
+        order_items: addedOrderItems // Use actual order items from database
       };
 
       console.log('Updated order with totals:', updatedOrder);
       
-      // Step 4: Show payment method selection first
+      // Step 5: Show payment method selection first
       console.log('Setting currentOrder for payment method selection:', updatedOrder);
       setCurrentOrder(updatedOrder);
       setShowPaymentMethodSelection(true);
@@ -323,7 +399,6 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
   }, [currentOrder]);
 
   const handleApplyDiscount = useCallback(async (orderId: string, discountCode: string) => {
-    setIsApplyingDiscount(true);
     try {
       const response = await api.orders.applyDiscount(orderId, { discount_code: discountCode });
       const result = await response.json();
@@ -338,8 +413,6 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
       console.error('Error applying discount:', err);
       setError(err instanceof Error ? err.message : 'Failed to apply discount');
       return null;
-    } finally {
-      setIsApplyingDiscount(false);
     }
   }, []);
 
@@ -361,17 +434,20 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
   }, [createPaymentIntent]);
 
   // Handle payment method selection
-  const handlePaymentMethodSelect = useCallback((method: 'cash' | 'gcash' | 'card' | 'paymongo') => {
+  const handlePaymentMethodSelect = useCallback(async (method: 'cash' | 'paymongo') => {
     setPaymentForm(prev => ({ ...prev, payment_method: method }));
     setShowPaymentMethodSelection(false);
     
     // Show appropriate payment modal based on selected method
     if (method === 'paymongo') {
-      setShowPaymentModal(true); // Use PaymentModal for PayMongo online payments
+      // Create PayMongo payment intent and show PayMongoPaymentModal
+      if (currentOrder) {
+        await handlePayMongoPayment(currentOrder);
+      }
     } else {
       setShowEnhancedPaymentModal(true); // Use EnhancedPaymentModal for cash payments
     }
-  }, []);
+  }, [currentOrder, handlePayMongoPayment]);
 
   // Payment modal handlers
   const handlePaymentComplete = (order: Order) => {
@@ -747,13 +823,9 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
         <PaymentModal
           order={currentOrder}
           paymentForm={paymentForm}
-          setPaymentForm={setPaymentForm}
           isUpdatingPayment={isUpdatingPayment}
-          isApplyingDiscount={isApplyingDiscount}
           onClose={() => setShowPaymentModal(false)}
           onUpdatePayment={handleUpdatePayment}
-          onApplyDiscount={handleApplyDiscount}
-          onPayMongoPayment={handlePayMongoPayment}
         />
       )}
 
@@ -765,6 +837,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
           onClose={() => setShowEnhancedPaymentModal(false)}
           onPaymentComplete={handlePaymentComplete}
           onReceiptGenerated={handleReceiptGenerated}
+          onApplyDiscount={handleApplyDiscount}
         />
       )}
 
@@ -784,6 +857,24 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             
             <div className="p-6">
               <p className="text-gray-600 mb-6">Choose how the customer will pay for this order:</p>
+              
+              {/* Webhook Test Button */}
+              {currentOrder && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-blue-900">PayMongo Webhook Testing</h4>
+                      <p className="text-xs text-blue-700">Test webhook events for order {currentOrder.order_number}</p>
+                    </div>
+                    <button
+                      onClick={() => setShowWebhookTest(true)}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-200"
+                    >
+                      Test Webhooks
+                    </button>
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-3">
                 {/* Cash Payment */}
@@ -809,34 +900,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                     <QrCode className="h-6 w-6 text-blue-600" />
                     <div>
                       <div className="font-medium text-gray-900">PayMongo Online</div>
-                      <div className="text-sm text-gray-600">QR code payment (GCash, Cards, Bank QR)</div>
-                    </div>
-                  </div>
-                </button>
-                
-                {/* Other Payment Methods */}
-                <button
-                  onClick={() => handlePaymentMethodSelect('gcash')}
-                  className="w-full p-4 border-2 border-gray-200 rounded-lg text-left hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <CreditCard className="h-6 w-6 text-gray-600" />
-                    <div>
-                      <div className="font-medium text-gray-900">GCash</div>
-                      <div className="text-sm text-gray-600">GCash mobile payment</div>
-                    </div>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => handlePaymentMethodSelect('card')}
-                  className="w-full p-4 border-2 border-gray-200 rounded-lg text-left hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <CreditCard className="h-6 w-6 text-gray-600" />
-                    <div>
-                      <div className="font-medium text-gray-900">Credit/Debit Card</div>
-                      <div className="text-sm text-gray-600">Card payment processing</div>
+                      <div className="text-sm text-gray-600">QR code payment (GCash, GrabPay, Maya, QR Ph)</div>
                     </div>
                   </div>
                 </button>
@@ -855,6 +919,15 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
           error={payMongoError}
           onCancel={() => cancelPayment(paymentIntent.paymentIntentId)}
           onClose={closePayMongoModal}
+        />
+      )}
+
+      {/* PayMongo Webhook Test Modal */}
+      {showWebhookTest && currentOrder && (
+        <PayMongoWebhookTest
+          orderId={currentOrder.id}
+          orderNumber={currentOrder.order_number}
+          onClose={() => setShowWebhookTest(false)}
         />
       )}
     </div>

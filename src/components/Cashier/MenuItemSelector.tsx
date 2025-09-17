@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Search, Clock, AlertTriangle, CheckCircle, Package, Image as ImageIcon, XCircle } from 'lucide-react';
+import { Plus, Search, Clock, AlertTriangle, CheckCircle, Package, Image as ImageIcon } from 'lucide-react';
 import { MenuItem } from '../../types/menu';
 import { useMenuItemSelection } from '../../hooks/useMenuItemSelection';
 import { useInventoryStock } from '../../hooks/useInventoryStock';
 import { checkIngredientAvailability, getAvailabilityStatus } from '../../utils/ingredientAvailability';
+import { api } from '../../utils/api';
+import { MenuItemAvailabilityResponse } from '../../types/orders';
 
 interface MenuItemSelectorProps {
   onAddToOrder: (menuItem: MenuItem, quantity: number, customizations?: string, specialInstructions?: string) => void;
@@ -75,14 +77,56 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
   const [quantity, setQuantity] = useState(1);
   const [customizations, setCustomizations] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
+  
+  // API-based availability state
+  const [availabilityData, setAvailabilityData] = useState<{ [key: string]: MenuItemAvailabilityResponse }>({});
+  const [checkingAvailability, setCheckingAvailability] = useState<{ [key: string]: boolean }>({});
+  
 
   useEffect(() => {
     fetchMenuItems();
   }, [fetchMenuItems]);
 
-  const handleAddToOrder = useCallback(() => {
+  // Check availability using new API endpoint
+  const checkMenuItemAvailability = useCallback(async (menuItem: MenuItem, requestedQuantity: number = 1) => {
+    try {
+      setCheckingAvailability(prev => ({ ...prev, [menuItem.id]: true }));
+      
+      const response = await api.orders.getMenuItemAvailability(menuItem.id, requestedQuantity);
+      const result = await response.json();
+      
+      if (result.success && result.data && result.data.length > 0) {
+        const availabilityData = result.data[0]; // API returns array, we take first item
+        setAvailabilityData(prev => ({ ...prev, [menuItem.id]: availabilityData }));
+        return availabilityData;
+      } else {
+        console.error('Failed to check availability:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error checking menu item availability:', error);
+      return null;
+    } finally {
+      setCheckingAvailability(prev => ({ ...prev, [menuItem.id]: false }));
+    }
+  }, []);
+
+
+  const handleAddToOrder = useCallback(async () => {
     if (selectedItem && quantity > 0) {
-      // Check stock before adding to order
+      // First check API-based availability
+      const availability = await checkMenuItemAvailability(selectedItem, quantity);
+      
+      if (!availability || !availability.is_available) {
+        const unavailableIngredients = availability?.unavailable_ingredients || [];
+        const message = unavailableIngredients && unavailableIngredients.length > 0 
+          ? `Cannot add ${selectedItem.name}: Insufficient ingredients. Max available: ${availability?.max_available_quantity || 0}`
+          : `Cannot add ${selectedItem.name}: Item is currently unavailable`;
+        alert(message);
+        return;
+      }
+      
+      // Also check local stock status as backup
       const stockStatus = checkMenuItemStock(selectedItem, quantity);
       if (!stockStatus.isAvailable) {
         alert(`Cannot add ${selectedItem.name}: ${stockStatus.stockMessage}`);
@@ -96,7 +140,7 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
       setCustomizations('');
       setSpecialInstructions('');
     }
-  }, [selectedItem, quantity, customizations, specialInstructions, onAddToOrder, checkMenuItemStock]);
+  }, [selectedItem, quantity, customizations, specialInstructions, onAddToOrder, checkMenuItemStock, checkMenuItemAvailability]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -104,13 +148,21 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
     }
   }, [onClose]);
 
-  const handleItemSelect = useCallback((item: MenuItem) => {
+  const handleItemSelect = useCallback(async (item: MenuItem) => {
     setSelectedItem(item);
-  }, []);
+    // Automatically check availability when item is selected
+    await checkMenuItemAvailability(item, quantity);
+  }, [quantity, checkMenuItemAvailability]);
 
-  const handleQuantityChange = useCallback((newQuantity: number) => {
-    setQuantity(Math.max(1, newQuantity));
-  }, []);
+  const handleQuantityChange = useCallback(async (newQuantity: number) => {
+    const validQuantity = Math.max(1, newQuantity);
+    setQuantity(validQuantity);
+    
+    // Re-check availability when quantity changes
+    if (selectedItem) {
+      await checkMenuItemAvailability(selectedItem, validQuantity);
+    }
+  }, [selectedItem, checkMenuItemAvailability]);
 
   const handleCustomizationsChange = useCallback((value: string) => {
     setCustomizations(value);
@@ -328,15 +380,87 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
             <div className="bg-gray-50 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Add to Order</h3>
               
-              {/* Ingredient Availability Alert */}
+              {/* API-based Ingredient Availability Alert */}
               {(() => {
+                const apiAvailability = availabilityData[selectedItem.id];
+                const isChecking = checkingAvailability[selectedItem.id];
+                
+                if (isChecking) {
+                  return (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <span className="text-blue-800 text-sm">Checking ingredient availability...</span>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                if (apiAvailability) {
+                  if (!apiAvailability.is_available && apiAvailability.unavailable_ingredients && apiAvailability.unavailable_ingredients.length > 0) {
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
+                          <div>
+                            <h4 className="text-red-800 font-medium">Insufficient Ingredients</h4>
+                            <p className="text-red-700 text-sm">
+                              Cannot fulfill requested quantity. Max available: {apiAvailability.max_available_quantity}
+                            </p>
+                            <div className="mt-2 text-xs text-red-600">
+                              Shortage: {apiAvailability.unavailable_ingredients.map(ing => 
+                                `${ing.ingredient_name} (need ${ing.required_quantity}, have ${ing.available_stock})`
+                              ).join(', ')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (apiAvailability.stock_summary?.low_stock_count && apiAvailability.stock_summary.low_stock_count > 0) {
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="h-5 w-5 text-amber-600" />
+                          <div>
+                            <h4 className="text-amber-800 font-medium">Low Stock Warning</h4>
+                            <p className="text-amber-700 text-sm">
+                              {apiAvailability.stock_summary?.low_stock_count || 0} ingredient(s) are running low
+                            </p>
+                            <div className="mt-2 text-xs text-amber-600">
+                              Max available quantity: {apiAvailability.max_available_quantity || 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <div>
+                            <h4 className="text-green-800 font-medium">Available</h4>
+                            <p className="text-green-700 text-sm">
+                              All ingredients are in stock
+                            </p>
+                            <div className="mt-2 text-xs text-green-600">
+                              Max available quantity: {apiAvailability.max_available_quantity || 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+                
+                // Fallback to local availability check
                 const ingredientAvailability = checkIngredientAvailability(selectedItem);
                 
                 if (!ingredientAvailability.isAvailable) {
                   return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                       <div className="flex items-center space-x-2">
-                        <XCircle className="h-5 w-5 text-red-600" />
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
                         <div>
                           <h4 className="text-red-800 font-medium">Unavailable Due to Missing Ingredients</h4>
                           <p className="text-red-700 text-sm">
@@ -481,16 +605,36 @@ const MenuItemSelector: React.FC<MenuItemSelectorProps> = React.memo(({ onAddToO
                   </button>
                   <button
                     onClick={handleAddToOrder}
-                    disabled={checkMenuItemStock(selectedItem, quantity).isOutOfStock}
+                    disabled={(() => {
+                      const apiAvailability = availabilityData[selectedItem.id];
+                      const stockStatus = checkMenuItemStock(selectedItem, quantity);
+                      return !apiAvailability?.is_available || stockStatus.isOutOfStock || checkingAvailability[selectedItem.id];
+                    })()}
                     className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 ${
-                      checkMenuItemStock(selectedItem, quantity).isOutOfStock
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                      (() => {
+                        const apiAvailability = availabilityData[selectedItem.id];
+                        const stockStatus = checkMenuItemStock(selectedItem, quantity);
+                        const isDisabled = !apiAvailability?.is_available || stockStatus.isOutOfStock || checkingAvailability[selectedItem.id];
+                        return isDisabled
+                          ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500';
+                      })()
                     }`}
                     aria-label={`Add ${selectedItem?.name} to order`}
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span>{checkMenuItemStock(selectedItem, quantity).isOutOfStock ? 'Out of Stock' : 'Add to Order'}</span>
+                    <span>
+                      {(() => {
+                        const apiAvailability = availabilityData[selectedItem.id];
+                        const stockStatus = checkMenuItemStock(selectedItem, quantity);
+                        const isChecking = checkingAvailability[selectedItem.id];
+                        
+                        if (isChecking) return 'Checking...';
+                        if (!apiAvailability?.is_available) return 'Unavailable';
+                        if (stockStatus.isOutOfStock) return 'Out of Stock';
+                        return 'Add to Order';
+                      })()}
+                    </span>
                   </button>
                 </div>
               </div>

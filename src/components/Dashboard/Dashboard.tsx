@@ -8,7 +8,11 @@ import RecentOrders from './RecentOrders';
 import InventoryAlerts from './InventoryAlerts';
 import StockUsageChart from './StockUsageChart';
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onNavigateToInventory?: () => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
   const { user } = useAuth();
   const { lastUpdated, refresh, isLoading, stats } = useDashboardData();
 
@@ -60,7 +64,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RecentOrders />
-        <InventoryAlerts />
+        <InventoryAlerts onViewAllAlerts={onNavigateToInventory} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

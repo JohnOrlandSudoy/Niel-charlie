@@ -359,6 +359,14 @@ export const api = {
     // GET Order Items
     getItems: (orderId: string) => apiRequest(`/orders/${orderId}/items`),
 
+    // GET Menu Item Availability
+    getMenuItemAvailability: (menuItemId: string, quantity: number = 1) =>
+      apiRequest(`/orders/menu-items/${menuItemId}/availability?quantity=${quantity}`),
+
+    // GET Order Ingredient Validation
+    getOrderIngredientValidation: (orderId: string) =>
+      apiRequest(`/orders/${orderId}/ingredient-validation`),
+
     // UPDATE Payment Status
     updatePayment: (orderId: string, data: any) =>
       apiRequest(`/orders/${orderId}/payment`, {
@@ -426,9 +434,9 @@ export const api = {
 
   // Payments endpoints
   payments: {
-    // GET Payment Status (using order-based endpoint)
-    getStatus: (orderId: string) => 
-      apiRequest(`/orders/${orderId}/payment-status`),
+    // GET Payment Status (using payment intent ID)
+    getStatus: (paymentIntentId: string) => 
+      apiRequest(`/payments/status/${paymentIntentId}`),
 
     // GET All Orders with PayMongo Payments (for admin management)
     getOrdersWithPayMongoPayments: (params?: {

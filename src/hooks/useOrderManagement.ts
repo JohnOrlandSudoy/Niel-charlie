@@ -18,16 +18,24 @@ export const useOrderManagement = () => {
 
   // Calculate order statistics
   const calculateOrderStats = useCallback((ordersData: ApiOrder[]) => {
+    const totalRevenue = ordersData.reduce((sum, order) => {
+      // Use calculated total if order has items, otherwise use order.total_amount
+      if (order.order_items && order.order_items.length > 0) {
+        const subtotal = order.order_items.reduce((itemSum, item) => itemSum + (item.total_price || 0), 0);
+        const tax = subtotal * 0.12;
+        return sum + (subtotal + tax);
+      }
+      return sum + (order.total_amount || 0);
+    }, 0);
+
     const stats: OrderStats = {
       totalOrders: ordersData.length,
       pendingOrders: ordersData.filter(order => order.status === 'pending').length,
       preparingOrders: ordersData.filter(order => order.status === 'preparing').length,
       readyOrders: ordersData.filter(order => order.status === 'ready').length,
       completedOrders: ordersData.filter(order => order.status === 'completed').length,
-      totalRevenue: ordersData.reduce((sum, order) => sum + order.total_amount, 0),
-      averageOrderValue: ordersData.length > 0 
-        ? ordersData.reduce((sum, order) => sum + order.total_amount, 0) / ordersData.length 
-        : 0
+      totalRevenue,
+      averageOrderValue: ordersData.length > 0 ? totalRevenue / ordersData.length : 0
     };
     setOrderStats(stats);
   }, []);

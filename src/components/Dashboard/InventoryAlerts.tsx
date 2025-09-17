@@ -1,8 +1,12 @@
 import React from 'react';
-import { AlertTriangle, Package, XCircle, Loader2, Plus } from 'lucide-react';
+import { AlertTriangle, Package, XCircle, Loader2 } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
-const InventoryAlerts: React.FC = () => {
+interface InventoryAlertsProps {
+  onViewAllAlerts?: () => void;
+}
+
+const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) => {
   const { lowStockAlerts, stats, isLoading, error } = useDashboardData();
 
   const getStatusIcon = (status: string) => {
@@ -63,10 +67,6 @@ const InventoryAlerts: React.FC = () => {
               {stats.outOfStockItems} Critical
             </span>
           )}
-          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
-            <Plus className="h-4 w-4" />
-            <span>Restock</span>
-          </button>
         </div>
       </div>
 
@@ -105,11 +105,6 @@ const InventoryAlerts: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex justify-end mt-3">
-                <button className="text-xs font-medium text-blue-600 hover:text-blue-700">
-                  Restock Now
-                </button>
-              </div>
             </div>
           );
         }) : (
@@ -127,7 +122,10 @@ const InventoryAlerts: React.FC = () => {
             <span className="text-gray-600">
               {stats.lowStockItems + stats.outOfStockItems} items need attention
             </span>
-            <button className="text-blue-600 hover:text-blue-700 font-medium">
+            <button 
+              onClick={onViewAllAlerts}
+              className="text-blue-600 hover:text-blue-700 font-medium"
+            >
               View All Alerts
             </button>
           </div>

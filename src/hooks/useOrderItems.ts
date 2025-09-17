@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { api } from '../utils/api';
 import { OrderItem, UpdateOrderItemRequest } from '../types/orders';
+import { debugApiResponse, debugOrderItemsAfterReload } from '../utils/orderDebug';
 
 export const useOrderItems = () => {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -17,11 +18,14 @@ export const useOrderItems = () => {
       
       const response = await api.orders.getItems(orderId);
       const result = await response.json();
+      debugApiResponse('Get Order Items', result);
       
       if (result.success && result.data) {
         setOrderItems(result.data);
-        console.log('Order items fetched:', result.data);
+        debugOrderItemsAfterReload(orderId, result.data);
+        console.log(`✅ Successfully fetched ${result.data.length} order items for order ${orderId}`);
       } else {
+        console.error(`❌ Failed to fetch order items for order ${orderId}:`, result.message);
         setError(result.message || 'Failed to fetch order items');
       }
     } catch (err) {

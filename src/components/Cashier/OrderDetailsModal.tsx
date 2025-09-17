@@ -36,7 +36,29 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
   const [loadingMenuItems, setLoadingMenuItems] = useState<{ [key: string]: boolean }>({});
 
   const handleEditSubmit = useCallback((item: OrderItem) => {
-    onUpdateItem(item.id, editForm);
+    // Convert customizations string back to object format
+    let customizationsObj = undefined;
+    if (editForm.customizations && typeof editForm.customizations === 'string' && editForm.customizations.trim()) {
+      try {
+        // Try to parse as JSON if it's already an object string
+        customizationsObj = JSON.parse(editForm.customizations);
+      } catch {
+        // If not JSON, create a structured object from the string
+        customizationsObj = {
+          notes: editForm.customizations.trim()
+        };
+      }
+    } else if (editForm.customizations && typeof editForm.customizations === 'object') {
+      customizationsObj = editForm.customizations;
+    }
+
+    const updateData: UpdateOrderItemRequest = {
+      quantity: editForm.quantity,
+      special_instructions: editForm.special_instructions,
+      customizations: customizationsObj
+    };
+    
+    onUpdateItem(item.id, updateData);
     setEditForm({});
   }, [editForm, onUpdateItem]);
 
@@ -96,9 +118,27 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
 
   const handleStartEdit = useCallback((item: OrderItem) => {
     onEditItem(item);
+    // Convert customizations object back to string for editing
+    let customizationsString = '';
+    if (item.customizations) {
+      if (typeof item.customizations === 'string') {
+        customizationsString = item.customizations;
+      } else {
+        // Convert object to readable string
+        const parts = [];
+        if (item.customizations.size) parts.push(`Size: ${item.customizations.size}`);
+        if (item.customizations.toppings && item.customizations.toppings.length > 0) {
+          parts.push(`Toppings: ${item.customizations.toppings.join(', ')}`);
+        }
+        if (item.customizations.spice_level) parts.push(`Spice: ${item.customizations.spice_level}`);
+        if (item.customizations.notes) parts.push(item.customizations.notes);
+        customizationsString = parts.join(', ');
+      }
+    }
+    
     setEditForm({
       quantity: item.quantity,
-      customizations: item.customizations || '',
+      customizations: customizationsString,
       special_instructions: item.special_instructions || ''
     });
   }, [onEditItem]);
@@ -132,6 +172,31 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
       ? 'bg-emerald-100 text-emerald-800' 
       : 'bg-red-100 text-red-800';
   }, [order.payment_status]);
+
+  // Calculate totals from order items (in case order totals are outdated)
+  const calculatedTotals = useMemo(() => {
+    const subtotal = orderItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+    const tax = subtotal * 0.12; // 12% VAT
+    const total = subtotal + tax;
+    
+    return {
+      subtotal,
+      tax,
+      total
+    };
+  }, [orderItems]);
+
+  // Use calculated totals if order items exist, otherwise use order totals
+  const displayTotals = useMemo(() => {
+    if (orderItems.length > 0) {
+      return calculatedTotals;
+    }
+    return {
+      subtotal: order.subtotal || 0,
+      tax: order.tax_amount || 0,
+      total: order.total_amount || 0
+    };
+  }, [orderItems, calculatedTotals, order]);
 
   return (
     <div 
@@ -183,9 +248,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                   </span>
                 </div>
                 <div><span className="font-medium">Payment Method:</span> {order.payment_method || 'N/A'}</div>
-                <div><span className="font-medium">Subtotal:</span> ₱{order.subtotal.toFixed(2)}</div>
-                <div><span className="font-medium">Tax:</span> ₱{order.tax_amount.toFixed(2)}</div>
-                <div><span className="font-medium">Total:</span> ₱{order.total_amount.toFixed(2)}</div>
+                <div><span className="font-medium">Subtotal:</span> ₱{displayTotals.subtotal.toFixed(2)}</div>
+                <div><span className="font-medium">Tax:</span> ₱{displayTotals.tax.toFixed(2)}</div>
+                <div><span className="font-medium">Total:</span> ₱{displayTotals.total.toFixed(2)}</div>
               </div>
             </div>
           </div>
@@ -250,7 +315,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                             <input
                               id={`customizations-${item.id}`}
                               type="text"
-                              value={editForm.customizations || item.customizations || ''}
+                              value={typeof editForm.customizations === 'string' ? editForm.customizations : ''}
                               onChange={(e) => handleEditChange('customizations', e.target.value)}
                               placeholder="e.g., Extra spicy"
                               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -360,59 +425,86 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                             <div className="text-sm text-gray-600 space-y-1">
                               <div>Quantity: {item.quantity} × ₱{item.unit_price.toFixed(2)}</div>
                               {item.customizations && (
-                                <div className="text-blue-600">Customizations: {item.customizations}</div>
+                                <div className="text-blue-600">
+                                  Customizations: {(() => {
+                                    if (typeof item.customizations === 'string') {
+                                      return item.customizations;
+                                    } else {
+                                      const parts = [];
+                                      if (item.customizations.size) parts.push(`Size: ${item.customizations.size}`);
+                                      if (item.customizations.toppings && item.customizations.toppings.length > 0) {
+                                        parts.push(`Toppings: ${item.customizations.toppings.join(', ')}`);
+                                      }
+                                      if (item.customizations.spice_level) parts.push(`Spice: ${item.customizations.spice_level}`);
+                                      if (item.customizations.notes) parts.push(item.customizations.notes);
+                                      return parts.join(', ');
+                                    }
+                                  })()}
+                                </div>
                               )}
                               {item.special_instructions && (
                                 <div className="text-amber-600">Instructions: {item.special_instructions}</div>
                               )}
-                            </div>
-                            
-                            {/* Ingredients */}
-                            {(() => {
-                              const ingredients = menuItemIngredients[item.menu_item_id];
-                              return ingredients && ingredients.length > 0 && (
-                                <div className="mt-3 pt-3 border-t border-gray-200">
-                                  <p className="text-xs font-medium text-gray-600 mb-2">Ingredients:</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {ingredients.map((ingredient, index) => (
-                                      <span
-                                        key={index}
-                                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full border"
-                                      >
-                                        {ingredient.ingredient?.name || 'Unknown'}
-                                        {ingredient.quantity_required > 0 && (
-                                          <span className="ml-1 text-gray-500">
-                                            ({ingredient.quantity_required} {ingredient.unit})
+                              
+                              {/* Ingredient Information */}
+                              {item.menu_item?.ingredients && item.menu_item.ingredients.length > 0 && (
+                                <div className="mt-2 p-2 bg-gray-50 rounded border">
+                                  <div className="text-xs font-medium text-gray-700 mb-1">Ingredients:</div>
+                                  <div className="space-y-1">
+                                    {item.menu_item.ingredients.map((ingredient, idx) => (
+                                      <div key={idx} className="flex items-center justify-between text-xs">
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-medium">{ingredient.name}</span>
+                                          <span className="text-gray-500">
+                                            {ingredient.total_required_for_order} {ingredient.unit}
+                                            {ingredient.is_optional && <span className="text-blue-500 ml-1">(optional)</span>}
                                           </span>
-                                        )}
-                                      </span>
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                          ingredient.stock_status === 'sufficient' 
+                                            ? 'bg-green-100 text-green-800'
+                                            : ingredient.stock_status === 'low_stock'
+                                            ? 'bg-amber-100 text-amber-800'
+                                            : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {ingredient.stock_status === 'sufficient' ? '✓' : 
+                                           ingredient.stock_status === 'low_stock' ? '⚠' : '✗'} 
+                                          {ingredient.current_stock}
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
-                              );
-                            })()}
+                              )}
+                            </div>
                           </div>
                         </div>
                         
                         <div className="flex items-center space-x-2 ml-4">
-                          <button
-                            onClick={() => handleStartEdit(item)}
-                            className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            title="Edit item"
-                            aria-label={`Edit ${item.menu_item?.name}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
+                          {/* Only show edit button if order is not completed */}
+                          {order.status !== 'completed' && (
+                            <button
+                              onClick={() => handleStartEdit(item)}
+                              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              title="Edit item"
+                              aria-label={`Edit ${item.menu_item?.name}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          )}
                           
-                          <button
-                            onClick={() => onDeleteItem(item.id)}
-                            disabled={isDeletingItem}
-                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            title="Delete item"
-                            aria-label={`Delete ${item.menu_item?.name}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {/* Only show delete button if order is not completed */}
+                          {order.status !== 'completed' && (
+                            <button
+                              onClick={() => onDeleteItem(item.id)}
+                              disabled={isDeletingItem}
+                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                              title="Delete item"
+                              aria-label={`Delete ${item.menu_item?.name}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}

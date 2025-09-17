@@ -11,7 +11,7 @@ export const usePaymentManagement = () => {
   const [error, setError] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     payment_status: 'unpaid' as 'unpaid' | 'paid' | 'refunded',
-    payment_method: 'cash' as 'cash' | 'gcash' | 'card' | 'paymongo'
+    payment_method: 'cash' as 'cash' | 'paymongo'
   });
 
   // Fetch available discounts

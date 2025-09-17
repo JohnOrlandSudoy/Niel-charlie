@@ -40,8 +40,8 @@ CREATE TABLE public.ingredients (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ingredients_pkey PRIMARY KEY (id),
-  CONSTRAINT ingredients_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
+  CONSTRAINT ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT ingredients_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.menu_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -74,9 +74,9 @@ CREATE TABLE public.menu_item_ingredients (
   created_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT menu_item_ingredients_pkey PRIMARY KEY (id),
+  CONSTRAINT menu_item_ingredients_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_ingredients_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id),
-  CONSTRAINT menu_item_ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT menu_item_ingredients_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id)
+  CONSTRAINT menu_item_ingredients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.menu_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -103,9 +103,27 @@ CREATE TABLE public.menu_items (
   created_by uuid,
   updated_by uuid,
   CONSTRAINT menu_items_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT menu_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.menu_categories(id),
   CONSTRAINT menu_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT menu_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.menu_categories(id)
+  CONSTRAINT menu_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
+);
+CREATE TABLE public.offline_payments (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  order_id uuid NOT NULL,
+  payment_method character varying NOT NULL,
+  amount numeric NOT NULL,
+  currency character varying DEFAULT 'PHP'::character varying,
+  payment_status character varying NOT NULL DEFAULT 'paid'::character varying,
+  transaction_id character varying,
+  receipt_number character varying UNIQUE,
+  notes text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT offline_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT offline_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT offline_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.order_discounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -220,10 +238,13 @@ CREATE TABLE public.payments (
   updated_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  receipt_number character varying,
+  notes text,
+  transaction_id character varying,
   CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT payments_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT payments_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.paymongo_payments (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -240,8 +261,8 @@ CREATE TABLE public.paymongo_payments (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT paymongo_payments_pkey PRIMARY KEY (id),
-  CONSTRAINT paymongo_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT paymongo_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT paymongo_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT paymongo_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.stock_alerts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -269,8 +290,8 @@ CREATE TABLE public.stock_movements (
   performed_by uuid NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT stock_movements_pkey PRIMARY KEY (id),
-  CONSTRAINT stock_movements_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.user_profiles(id),
-  CONSTRAINT stock_movements_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id)
+  CONSTRAINT stock_movements_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id),
+  CONSTRAINT stock_movements_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.user_profiles(id)
 );
 CREATE TABLE public.user_profiles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
