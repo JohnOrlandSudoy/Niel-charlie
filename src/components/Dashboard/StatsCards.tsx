@@ -62,13 +62,13 @@ const StatsCards: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
         {[1, 2, 3, 4].map((index) => (
           <div
             key={index}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6"
           >
-            <div className="flex items-center justify-center h-24">
+            <div className="flex items-center justify-center h-20 sm:h-24">
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             </div>
           </div>
@@ -89,28 +89,28 @@ const StatsCards: React.FC = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
       {statsData.map((stat, index) => {
         const Icon = stat.icon;
         
         return (
           <div
             key={index}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200"
+            className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200 touch-manipulation"
           >
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{stat.label}</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1 truncate">{stat.value}</p>
               </div>
-              <div className={`p-3 rounded-lg bg-${stat.color}-100`}>
-                <Icon className={`h-6 w-6 text-${stat.color}-600`} />
+              <div className={`p-2 sm:p-3 rounded-lg bg-${stat.color}-100 flex-shrink-0 ml-2`}>
+                <Icon className={`h-5 w-5 sm:h-6 sm:w-6 text-${stat.color}-600`} />
               </div>
             </div>
             
-            <div className="flex items-center mt-4">
+            <div className="flex items-center mt-3 sm:mt-4">
               <span
-                className={`text-sm font-medium ${
+                className={`text-xs sm:text-sm font-medium ${
                   stat.changeType === 'increase'
                     ? 'text-emerald-600'
                     : stat.changeType === 'decrease'
@@ -120,7 +120,7 @@ const StatsCards: React.FC = () => {
               >
                 {stat.change}
               </span>
-              <span className="text-sm text-gray-500 ml-2">
+              <span className="text-xs sm:text-sm text-gray-500 ml-2 truncate">
                 {stat.label === 'Today\'s Sales' || stat.label === 'Orders Today' 
                   ? 'vs yesterday' 
                   : stat.label === 'Menu Items' 

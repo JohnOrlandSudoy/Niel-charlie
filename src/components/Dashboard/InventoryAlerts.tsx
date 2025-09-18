@@ -33,11 +33,11 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-64">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex items-center justify-center h-48 sm:h-64">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-            <p className="text-gray-600">Loading inventory alerts...</p>
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mx-auto mb-2" />
+            <p className="text-sm sm:text-base text-gray-600">Loading inventory alerts...</p>
           </div>
         </div>
       </div>
@@ -58,9 +58,9 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Inventory Alerts</h3>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Inventory Alerts</h3>
         <div className="flex items-center space-x-2">
           {stats.outOfStockItems > 0 && (
             <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
@@ -76,12 +76,12 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
           return (
             <div
               key={alert.id}
-              className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-sm ${getStatusColor(status)}`}
+              className={`p-3 sm:p-4 border rounded-lg transition-all duration-200 hover:shadow-sm touch-manipulation ${getStatusColor(status)}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center space-x-2">
                   {getStatusIcon(status)}
-                  <span className="font-medium">{alert.name}</span>
+                  <span className="font-medium text-sm sm:text-base">{alert.name}</span>
                 </div>
                 <span className="text-xs font-medium uppercase">
                   {status === 'out' ? 'OUT OF STOCK' : 'LOW STOCK'}
@@ -108,23 +108,23 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
             </div>
           );
         }) : (
-          <div className="text-center py-8">
-            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No inventory alerts</p>
-            <p className="text-sm text-gray-400 mt-1">All items are well stocked</p>
+          <div className="text-center py-6 sm:py-8">
+            <Package className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-sm sm:text-base text-gray-500">No inventory alerts</p>
+            <p className="text-xs sm:text-sm text-gray-400 mt-1">All items are well stocked</p>
           </div>
         )}
       </div>
 
       {lowStockAlerts.length > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm gap-2">
             <span className="text-gray-600">
               {stats.lowStockItems + stats.outOfStockItems} items need attention
             </span>
             <button 
               onClick={onViewAllAlerts}
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-blue-600 hover:text-blue-700 font-medium touch-manipulation text-left sm:text-right"
             >
               View All Alerts
             </button>

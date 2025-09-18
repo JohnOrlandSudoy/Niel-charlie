@@ -1,7 +1,8 @@
 // API utility functions for making authenticated requests
 import { offlineApiManager } from './offlineApiManager';
+import { config } from './config';
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = config.api.baseUrl;
 
 // Get auth token from localStorage
 export const getAuthToken = (): string | null => {
@@ -77,6 +78,19 @@ export const api = {
     logout: () =>
       apiRequest('/auth/logout', {
         method: 'POST',
+      }),
+
+
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiRequest('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      }),
+
+    resendVerification: (email: string) =>
+      apiRequest('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
       }),
   },
 

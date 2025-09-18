@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignUpData, UserRole } from '../../types/auth';
+import { calculatePasswordStrength, getPasswordStrengthColor, getPasswordStrengthWidth } from '../../utils/passwordStrength';
 
 const SignUp: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,6 +21,7 @@ const SignUp: React.FC = () => {
   } = useForm<SignUpData>();
 
   const password = watch('password');
+  const passwordStrength = password ? calculatePasswordStrength(password) : null;
 
   const onSubmit = async (data: SignUpData) => {
     try {
@@ -32,6 +34,7 @@ const SignUp: React.FC = () => {
         username: data.username.trim(),
         email: data.email.trim(),
         password: data.password.trim(),
+        confirmPassword: data.confirmPassword.trim(),
         role: data.role
       };
       
@@ -245,6 +248,34 @@ const SignUp: React.FC = () => {
               </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              )}
+
+              {/* Password Strength Indicator */}
+              {password && passwordStrength && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Password strength:</span>
+                    <span className={`font-medium ${passwordStrength.color}`}>
+                      {passwordStrength.level}
+                    </span>
+                  </div>
+                  <div className="mt-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor(passwordStrength.score)}`}
+                      style={{ width: getPasswordStrengthWidth(passwordStrength.score) }}
+                    />
+                  </div>
+                  {passwordStrength.feedback.length > 0 && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      <p>Password should include:</p>
+                      <ul className="list-disc list-inside mt-1">
+                        {passwordStrength.feedback.map((item, index) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

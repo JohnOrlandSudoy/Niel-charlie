@@ -72,11 +72,11 @@ const RecentOrders: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-64">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex items-center justify-center h-48 sm:h-64">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-            <p className="text-gray-600">Loading recent orders...</p>
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mx-auto mb-2" />
+            <p className="text-sm sm:text-base text-gray-600">Loading recent orders...</p>
           </div>
         </div>
       </div>
@@ -97,24 +97,24 @@ const RecentOrders: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Recent Orders</h3>
+        <button className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 touch-manipulation">
           <Eye className="h-4 w-4" />
           <span>View All</span>
         </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {recentOrders.length > 0 ? recentOrders.map((order) => (
           <div
             key={order.id}
-            className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200 touch-manipulation"
           >
-            <div className="flex-1">
-              <div className="flex items-center space-x-3 mb-2">
-                <span className="font-medium text-gray-900">{order.order_number}</span>
+            <div className="flex-1 mb-3 sm:mb-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="font-medium text-gray-900 text-sm sm:text-base">{order.order_number}</span>
                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
                   {order.status}
                 </span>
@@ -134,18 +134,18 @@ const RecentOrders: React.FC = () => {
               <p className="text-xs text-gray-500">{getOrderItems(order)}</p>
             </div>
 
-            <div className="text-right">
-              <p className="font-semibold text-gray-900">{formatCurrency(order.total_amount)}</p>
-              <div className="flex items-center space-x-1 mt-1">
+            <div className="flex items-center justify-between sm:flex-col sm:text-right">
+              <p className="font-semibold text-gray-900 text-sm sm:text-base">{formatCurrency(order.total_amount)}</p>
+              <div className="flex items-center space-x-1">
                 {getStatusIcon(order.status)}
                 <span className="text-xs text-gray-500">{formatTimeAgo(order.created_at)}</span>
               </div>
             </div>
           </div>
         )) : (
-          <div className="text-center py-8">
-            <p className="text-gray-500">No recent orders found</p>
-            <p className="text-sm text-gray-400 mt-1">Orders will appear here as they come in</p>
+          <div className="text-center py-6 sm:py-8">
+            <p className="text-sm sm:text-base text-gray-500">No recent orders found</p>
+            <p className="text-xs sm:text-sm text-gray-400 mt-1">Orders will appear here as they come in</p>
           </div>
         )}
       </div>

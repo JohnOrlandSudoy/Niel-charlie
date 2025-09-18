@@ -14,6 +14,7 @@ export type UserRole = 'admin' | 'cashier' | 'kitchen';
 export interface LoginCredentials {
   username: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface SignUpData {
@@ -26,11 +27,19 @@ export interface SignUpData {
   role: UserRole;
 }
 
+
+export interface ChangePasswordData {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; message: string }>;
   signup: (data: SignUpData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
+  changePassword: (data: ChangePasswordData) => Promise<{ success: boolean; message: string }>;
+  resendVerification: (email: string) => Promise<{ success: boolean; message: string }>;
   isLoading: boolean;
   isAuthenticated: boolean;
 }

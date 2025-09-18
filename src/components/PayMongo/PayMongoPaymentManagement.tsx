@@ -136,23 +136,23 @@ const PayMongoPaymentManagement: React.FC = () => {
   }, [loadPayments]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">PayMongo Payments</h1>
-          <p className="text-gray-600 mt-1">Monitor and manage all PayMongo payment transactions</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">PayMongo Payments</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">Monitor and manage all PayMongo payment transactions</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50"
+            className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 disabled:opacity-50 text-sm sm:text-base"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-          <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200">
+          <button className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base">
             <Download className="h-4 w-4" />
             <span>Export</span>
           </button>
@@ -181,71 +181,71 @@ const PayMongoPaymentManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {/* Statistics Cards - Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Payments</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalPayments}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Total Payments</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{stats.totalPayments}</p>
             </div>
-            <div className="p-3 rounded-full bg-blue-100">
-              <CreditCard className="h-6 w-6 text-blue-600" />
+            <div className="p-2 sm:p-3 rounded-full bg-blue-100">
+              <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Successful</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">{stats.successfulPayments}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Successful</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1">{stats.successfulPayments}</p>
             </div>
-            <div className="p-3 rounded-full bg-green-100">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="p-2 sm:p-3 rounded-full bg-green-100">
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{stats.pendingPayments}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Pending</p>
+              <p className="text-lg sm:text-2xl font-bold text-amber-600 mt-1">{stats.pendingPayments}</p>
             </div>
-            <div className="p-3 rounded-full bg-amber-100">
-              <Calendar className="h-6 w-6 text-amber-600" />
+            <div className="p-2 sm:p-3 rounded-full bg-amber-100">
+              <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Failed</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{stats.failedPayments}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Failed</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-600 mt-1">{stats.failedPayments}</p>
             </div>
-            <div className="p-3 rounded-full bg-red-100">
-              <XCircle className="h-6 w-6 text-red-600" />
+            <div className="p-2 sm:p-3 rounded-full bg-red-100">
+              <XCircle className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Amount</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatAmount(stats.totalAmount)}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Total Amount</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{formatAmount(stats.totalAmount)}</p>
             </div>
-            <div className="p-3 rounded-full bg-green-100">
-              <DollarSign className="h-6 w-6 text-green-600" />
+            <div className="p-2 sm:p-3 rounded-full bg-green-100">
+              <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {/* Search and Filter - Responsive */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
         <div className="flex flex-col space-y-4">
           {/* Search and Filter Row */}
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
@@ -257,7 +257,7 @@ const PayMongoPaymentManagement: React.FC = () => {
                   placeholder="Search by payment ID, order number, or customer..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -267,7 +267,7 @@ const PayMongoPaymentManagement: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => handleFilterChange(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="border border-gray-300 rounded-lg px-2 sm:px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
               >
                 <option value="all">All Status</option>
                 <option value="awaiting_payment_method">Awaiting Payment Method</option>
@@ -282,20 +282,20 @@ const PayMongoPaymentManagement: React.FC = () => {
 
           {/* Manual Payment ID Input */}
           <div className="border-t border-gray-200 pt-4">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
               <div className="flex-1">
                 <input
                   type="text"
                   placeholder="Enter Payment Intent ID (e.g., pi_EostntdQe4tS6TP1fEFFCvA8)"
                   value={manualPaymentId}
                   onChange={(e) => setManualPaymentId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                 />
               </div>
               <button
                 onClick={handleAddManualPayment}
                 disabled={!manualPaymentId.trim() || isAddingManual}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors duration-200"
+                className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base"
               >
                 {isAddingManual ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -305,13 +305,13 @@ const PayMongoPaymentManagement: React.FC = () => {
                 <span>{isAddingManual ? 'Adding...' : 'Add Payment'}</span>
               </button>
             </div>
-            <div className="flex items-center justify-between mt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-2 gap-2">
               <p className="text-xs text-gray-500">
                 Add a specific payment by entering its Payment Intent ID
               </p>
               <button
                 onClick={() => setManualPaymentId('pi_EostntdQe4tS6TP1fEFFCvA8')}
-                className="text-xs text-blue-600 hover:text-blue-700 underline"
+                className="text-xs text-blue-600 hover:text-blue-700 underline text-left sm:text-right"
               >
                 Use Test Payment ID
               </button>
@@ -320,9 +320,8 @@ const PayMongoPaymentManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Payments Table */}
+      {/* Payments Display - Responsive */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -342,134 +341,400 @@ const PayMongoPaymentManagement: React.FC = () => {
               </div>
             )}
           </div>
-          ) : filteredPayments.length > 0 ? (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment Details
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order Info
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.paymentIntentId} className="hover:bg-gray-50 transition-colors duration-200">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {payment.paymentIntentId}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {payment.description}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {payment.metadata.orderNumber}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {payment.metadata.orderType.replace('_', ' ').toUpperCase()}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Created by: {payment.metadata.createdByUsername}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {payment.metadata.customerName}
-                        </div>
-                        {payment.metadata.customer_phone && (
-                          <div className="text-sm text-gray-500">
-                            {payment.metadata.customer_phone}
+        ) : filteredPayments.length > 0 ? (
+          <>
+            {/* Desktop Table View (1280px+) */}
+            <div className="hidden xl:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Details
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order Info
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPayments.map((payment) => (
+                    <tr key={payment.paymentIntentId} className="hover:bg-gray-50 transition-colors duration-200">
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={payment.paymentIntentId}>
+                            {payment.paymentIntentId}
                           </div>
-                        )}
+                          <div className="text-sm text-gray-500 truncate" title={payment.description}>
+                            {payment.description}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={payment.metadata.orderNumber}>
+                            {payment.metadata.orderNumber}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {payment.metadata.orderType.replace('_', ' ').toUpperCase()}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Created by: {payment.metadata.createdByUsername}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={payment.metadata.customerName}>
+                            {payment.metadata.customerName}
+                          </div>
+                          {payment.metadata.customer_phone && (
+                            <div className="text-sm text-gray-500 truncate" title={payment.metadata.customer_phone}>
+                              {payment.metadata.customer_phone}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">
+                          {formatAmount(payment.amount, payment.currency)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(payment.status) === 'CheckCircle' && <CheckCircle className="h-5 w-5 text-green-600" />}
+                          {getStatusIcon(payment.status) === 'XCircle' && <XCircle className="h-5 w-5 text-red-600" />}
+                          {getStatusIcon(payment.status) === 'Clock' && <Calendar className={`h-5 w-5 ${payment.status === 'processing' ? 'text-blue-600 animate-spin' : 'text-amber-600'}`} />}
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                            {payment.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {getStatusMessage(payment.status)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {formatTimestamp(payment.created_at)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Updated: {formatTimestamp(payment.updated_at)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleViewDetails(payment)}
+                            className="text-blue-600 hover:text-blue-700 p-1 rounded" 
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleGenerateReceipt(payment.metadata.orderId, payment.metadata.orderNumber)}
+                            className="text-green-600 hover:text-green-700 p-1 rounded" 
+                            title="Generate Receipt"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCopy(payment.paymentIntentId)}
+                            className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                            title="Copy Payment ID"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Laptop Table View (1024px - 1279px) */}
+            <div className="hidden lg:block xl:hidden overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Details
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order Info
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPayments.map((payment) => (
+                    <tr key={payment.paymentIntentId} className="hover:bg-gray-50 transition-colors duration-200">
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={payment.paymentIntentId}>
+                            {payment.paymentIntentId}
+                          </div>
+                          <div className="text-sm text-gray-500 truncate" title={payment.description}>
+                            {payment.description}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {payment.metadata.customerName}
+                            {payment.metadata.customer_phone && ` • ${payment.metadata.customer_phone}`}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 truncate" title={payment.metadata.orderNumber}>
+                            {payment.metadata.orderNumber}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {payment.metadata.orderType.replace('_', ' ').toUpperCase()}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {formatTimestamp(payment.created_at)}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">
+                          {formatAmount(payment.amount, payment.currency)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(payment.status) === 'CheckCircle' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                          {getStatusIcon(payment.status) === 'XCircle' && <XCircle className="h-4 w-4 text-red-600" />}
+                          {getStatusIcon(payment.status) === 'Clock' && <Calendar className={`h-4 w-4 ${payment.status === 'processing' ? 'text-blue-600 animate-spin' : 'text-amber-600'}`} />}
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                            {payment.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => handleViewDetails(payment)}
+                            className="text-blue-600 hover:text-blue-700 p-1 rounded" 
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleGenerateReceipt(payment.metadata.orderId, payment.metadata.orderNumber)}
+                            className="text-green-600 hover:text-green-700 p-1 rounded" 
+                            title="Generate Receipt"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCopy(payment.paymentIntentId)}
+                            className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                            title="Copy Payment ID"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Tablet Card View (640px - 1023px) */}
+            <div className="hidden md:block lg:hidden">
+              <div className="divide-y divide-gray-200">
+                {filteredPayments.map((payment) => (
+                  <div key={payment.paymentIntentId} className="p-4 hover:bg-gray-50 transition-colors duration-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h3 className="text-sm font-medium text-gray-900 truncate">
+                            {payment.paymentIntentId}
+                          </h3>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                            {payment.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <p className="text-xs text-gray-500">Order</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {payment.metadata.orderNumber}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {payment.metadata.orderType.replace('_', ' ').toUpperCase()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Amount</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {formatAmount(payment.amount, payment.currency)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="text-xs text-gray-500">
+                              {payment.metadata.customerName}
+                            </div>
+                            {payment.metadata.customer_phone && (
+                              <div className="text-xs text-gray-500">
+                                • {payment.metadata.customer_phone}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {formatTimestamp(payment.created_at)}
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900">
-                        {formatAmount(payment.amount, payment.currency)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(payment.status) === 'CheckCircle' && <CheckCircle className="h-5 w-5 text-green-600" />}
-                        {getStatusIcon(payment.status) === 'XCircle' && <XCircle className="h-5 w-5 text-red-600" />}
-                        {getStatusIcon(payment.status) === 'Clock' && <Calendar className={`h-5 w-5 ${payment.status === 'processing' ? 'text-blue-600 animate-spin' : 'text-amber-600'}`} />}
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
-                          {payment.status.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {getStatusMessage(payment.status)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {formatTimestamp(payment.created_at)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Updated: {formatTimestamp(payment.updated_at)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+                      
+                      <div className="flex items-center space-x-1 ml-4">
                         <button
                           onClick={() => handleViewDetails(payment)}
-                          className="text-blue-600 hover:text-blue-700 p-1 rounded" 
+                          className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" 
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleGenerateReceipt(payment.metadata.orderId, payment.metadata.orderNumber)}
-                          className="text-green-600 hover:text-green-700 p-1 rounded" 
+                          className="text-green-600 hover:text-green-700 p-2 rounded-lg hover:bg-green-50" 
                           title="Generate Receipt"
                         >
                           <Download className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleCopy(payment.paymentIntentId)}
-                          className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                          className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 
                           title="Copy Payment ID"
                         >
                           <Copy className="h-4 w-4" />
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="text-center py-12">
-              <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No payments found</p>
-              <p className="text-gray-400 mt-1">Try adjusting your search or filters</p>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Mobile Card View (< 640px) */}
+            <div className="md:hidden">
+              <div className="divide-y divide-gray-200">
+                {filteredPayments.map((payment) => (
+                  <div key={payment.paymentIntentId} className="p-4 hover:bg-gray-50 transition-colors duration-200">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-gray-900 truncate">
+                          {payment.paymentIntentId}
+                        </h3>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                          {payment.status.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-xs text-gray-500">Order</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {payment.metadata.orderNumber}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {payment.metadata.orderType.replace('_', ' ').toUpperCase()}
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-gray-500">Amount</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {formatAmount(payment.amount, payment.currency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Customer</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {payment.metadata.customerName}
+                            </p>
+                            {payment.metadata.customer_phone && (
+                              <p className="text-xs text-gray-500">
+                                {payment.metadata.customer_phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            {formatTimestamp(payment.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleViewDetails(payment)}
+                            className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" 
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleGenerateReceipt(payment.metadata.orderId, payment.metadata.orderNumber)}
+                            className="text-green-600 hover:text-green-700 p-2 rounded-lg hover:bg-green-50" 
+                            title="Generate Receipt"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCopy(payment.paymentIntentId)}
+                            className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 
+                            title="Copy Payment ID"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg">No payments found</p>
+            <p className="text-gray-400 mt-1">Try adjusting your search or filters</p>
+          </div>
+        )}
       </div>
 
       {/* Payment Details Modal */}

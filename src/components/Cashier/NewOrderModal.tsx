@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { X, Plus, Trash2, Save, User, Phone, Clock, MessageSquare, AlertTriangle, XCircle, CreditCard, QrCode } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { X, Plus, Trash2, Save, User, Phone, Clock, MessageSquare, AlertTriangle, XCircle, CreditCard, QrCode, DollarSign, Loader2 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { CreateOrderRequest, AddOrderItemRequest, Order, ApiResponse } from '../../types/orders';
 import { MenuItem } from '../../types/menu';
@@ -28,6 +28,16 @@ interface OrderItem {
   totalPrice: number;
 }
 
+interface PaymentMethod {
+  method_key: string;
+  method_name: string;
+  method_description: string;
+  is_online: boolean;
+  display_order: number;
+  icon_name: string;
+  color_code: string;
+}
+
 const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrderCreated }) => {
   const [orderData, setOrderData] = useState<CreateOrderRequest>({
     order_type: 'dine_in',
@@ -52,6 +62,10 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
     payment_method: 'cash' as 'cash' | 'paymongo'
   });
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+  
+  // Payment methods state
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
 
   // Use inventory stock checking
   const { checkOrderStock } = useInventoryStock();
@@ -67,6 +81,50 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
     cancelPayment,
     closePayMongoModal
   } = usePayMongoPayment();
+
+  // Fetch payment methods
+  const fetchPaymentMethods = useCallback(async () => {
+    try {
+      setLoadingPaymentMethods(true);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.warn('No authentication token found for fetching payment methods');
+        return;
+      }
+      
+      const response = await fetch('http://localhost:3000/api/payments/methods/available', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Filter to only show Cash and PayMongo methods
+          const filteredMethods = result.data.filter((method: any) => 
+            method.method_key === 'cash' || method.method_key === 'paymongo'
+          );
+          setPaymentMethods(filteredMethods);
+          console.log('Available payment methods loaded:', filteredMethods);
+        }
+      } else {
+        console.error('Failed to fetch payment methods:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching payment methods:', error);
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  }, []);
+
+  // Fetch payment methods on component mount
+  useEffect(() => {
+    fetchPaymentMethods();
+  }, [fetchPaymentMethods]);
 
   // Calculate totals with memoization
   const { subtotal, tax, total } = useMemo(() => {
@@ -405,6 +463,23 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
       
       if (result.success) {
         console.log('Discount applied successfully:', result);
+        
+        // Update the current order with the new discounted totals from the API response
+        if (currentOrder && result.data) {
+          const updatedOrder = {
+            ...currentOrder,
+            ...result.data, // This includes the updated totals with discount applied
+            discount_applied: result.data.discount_applied,
+            discount_amount: result.data.discount_amount,
+            subtotal: result.data.subtotal,
+            tax_amount: result.data.tax_amount,
+            total_amount: result.data.total_amount
+          };
+          
+          console.log('Updating current order with discounted totals:', updatedOrder);
+          setCurrentOrder(updatedOrder);
+        }
+        
         return result.data;
       } else {
         throw new Error(result.message || 'Failed to apply discount');
@@ -414,7 +489,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
       setError(err instanceof Error ? err.message : 'Failed to apply discount');
       return null;
     }
-  }, []);
+  }, [currentOrder]);
 
   const handlePayMongoPayment = useCallback(async (order: Order) => {
     try {
@@ -433,19 +508,25 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
     }
   }, [createPaymentIntent]);
 
+  // Get available payment methods (API already returns only available methods)
+  const availablePaymentMethods = useMemo(() => {
+    return paymentMethods; // API already filters to available methods
+  }, [paymentMethods]);
+
   // Handle payment method selection
-  const handlePaymentMethodSelect = useCallback(async (method: 'cash' | 'paymongo') => {
-    setPaymentForm(prev => ({ ...prev, payment_method: method }));
+  const handlePaymentMethodSelect = useCallback(async (methodKey: string) => {
+    setPaymentForm(prev => ({ ...prev, payment_method: methodKey as 'cash' | 'paymongo' }));
     setShowPaymentMethodSelection(false);
     
     // Show appropriate payment modal based on selected method
-    if (method === 'paymongo') {
+    if (methodKey === 'paymongo') {
       // Create PayMongo payment intent and show PayMongoPaymentModal
       if (currentOrder) {
         await handlePayMongoPayment(currentOrder);
       }
-    } else {
-      setShowEnhancedPaymentModal(true); // Use EnhancedPaymentModal for cash payments
+    } else if (methodKey === 'cash') {
+      // For cash payments, directly show EnhancedPaymentModal with cash-only options
+      setShowEnhancedPaymentModal(true);
     }
   }, [currentOrder, handlePayMongoPayment]);
 
@@ -476,25 +557,28 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-order-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 id="new-order-title" className="text-xl font-semibold text-gray-900">Create New Order</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close new order modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h2 id="new-order-title" className="text-lg sm:text-xl font-semibold text-gray-900">Create New Order</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Close new order modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <div className="flex items-center space-x-2">
@@ -504,11 +588,11 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             {/* Order Details */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Order Details</h3>
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Order Details</h3>
                 
                 <div className="space-y-4">
                   <div>
@@ -519,7 +603,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                       name="order_type"
                       value={orderData.order_type}
                       onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                       aria-label="Order type"
                     >
                       <option value="dine_in">Dine In</option>
@@ -537,7 +621,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                         name="table_number"
                         value={orderData.table_number || ''}
                         onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                         placeholder="Enter table number"
                         aria-label="Table number"
                       />
@@ -555,7 +639,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                         name="customer_name"
                         value={orderData.customer_name}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                         placeholder="Customer name (optional)"
                         aria-label="Customer name"
                       />
@@ -573,7 +657,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                         name="customer_phone"
                         value={orderData.customer_phone}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                         placeholder="Phone number (optional)"
                         aria-label="Customer phone number"
                       />
@@ -609,7 +693,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                         value={orderData.special_instructions}
                         onChange={handleInputChange}
                         rows={3}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base touch-manipulation resize-none"
                         placeholder="Any special instructions for this order..."
                         aria-label="Special instructions for the order"
                       />
@@ -620,16 +704,16 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             </div>
 
             {/* Order Items */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Order Items</h3>
+            <div className="space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900">Order Items</h3>
                 <button
                   onClick={() => setShowMenuItemSelector(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="bg-blue-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-blue-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
                   aria-label="Add menu item to order"
                 >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  <span>Add Item</span>
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+                  <span className="text-sm sm:text-base font-medium">Add Item</span>
                 </button>
               </div>
 
@@ -640,13 +724,13 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                     const hasStockIssue = stockCheck.unavailableItems.length > 0 || stockCheck.lowStockItems.length > 0;
                     
                     return (
-                      <div key={index} className={`rounded-lg p-4 ${
+                      <div key={index} className={`rounded-lg p-3 sm:p-4 ${
                         hasStockIssue ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-medium text-gray-900">{item.menuItem.name}</h4>
+                      } touch-manipulation`}>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 gap-2">
+                              <h4 className="font-medium text-gray-900 text-sm sm:text-base truncate">{item.menuItem.name}</h4>
                               {stockCheck.unavailableItems.length > 0 && (
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                   <XCircle className="h-3 w-3 mr-1" />
@@ -676,14 +760,14 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                               </p>
                             )}
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">₱{item.totalPrice.toFixed(2)}</p>
+                          <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
+                            <p className="font-medium text-gray-900 text-sm sm:text-base">₱{item.totalPrice.toFixed(2)}</p>
                             <button
                               onClick={() => handleRemoveItem(index)}
-                              className="text-red-600 hover:text-red-700 mt-1 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+                              className="text-red-600 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 rounded p-2 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
                               aria-label={`Remove ${item.menuItem.name} from order`}
                             >
-                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
                             </button>
                           </div>
                         </div>
@@ -743,8 +827,8 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
               {/* Order Summary */}
               {orderItems.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-3">Order Summary</h4>
+                <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                  <h4 className="font-medium text-gray-900 mb-3 text-sm sm:text-base">Order Summary</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
@@ -765,11 +849,11 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
             <button
               onClick={onClose}
               disabled={isCreating}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              className="w-full sm:w-auto px-4 py-2 sm:py-2.5 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-500 touch-manipulation min-h-[44px] text-sm sm:text-base"
               aria-label="Cancel order creation"
             >
               Cancel
@@ -791,7 +875,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
                 })));
                 return stockCheck.unavailableItems.length > 0;
               })()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px] text-sm sm:text-base"
               aria-label="Create new order"
             >
               {isCreating ? (
@@ -838,6 +922,7 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
           onPaymentComplete={handlePaymentComplete}
           onReceiptGenerated={handleReceiptGenerated}
           onApplyDiscount={handleApplyDiscount}
+          cashOnly={paymentForm.payment_method === 'cash'}
         />
       )}
 
@@ -858,53 +943,84 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             <div className="p-6">
               <p className="text-gray-600 mb-6">Choose how the customer will pay for this order:</p>
               
-              {/* Webhook Test Button */}
-              {currentOrder && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium text-blue-900">PayMongo Webhook Testing</h4>
-                      <p className="text-xs text-blue-700">Test webhook events for order {currentOrder.order_number}</p>
-                    </div>
-                    <button
-                      onClick={() => setShowWebhookTest(true)}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-200"
-                    >
-                      Test Webhooks
-                    </button>
-                  </div>
+              {loadingPaymentMethods ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-600">Loading payment methods...</span>
+                </div>
+              ) : availablePaymentMethods.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <CreditCard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg font-medium">No Payment Methods Available</p>
+                  <p className="text-sm mt-1">Please enable payment methods in Settings to process payments.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {availablePaymentMethods
+                    .sort((a, b) => a.display_order - b.display_order)
+                    .map((method) => {
+                      const getIcon = () => {
+                        switch (method.method_key) {
+                          case 'cash':
+                            return <DollarSign className="h-6 w-6 text-green-600" />;
+                          case 'paymongo':
+                            return <QrCode className="h-6 w-6 text-blue-600" />;
+                          case 'gcash':
+                            return <CreditCard className="h-6 w-6 text-blue-600" />;
+                          case 'card':
+                            return <CreditCard className="h-6 w-6 text-purple-600" />;
+                          case 'qrph':
+                            return <QrCode className="h-6 w-6 text-cyan-600" />;
+                          default:
+                            return <CreditCard className="h-6 w-6 text-gray-600" />;
+                        }
+                      };
+
+                      const getBorderColor = () => {
+                        switch (method.method_key) {
+                          case 'cash':
+                            return 'border-green-200 hover:border-green-500 hover:bg-green-50';
+                          case 'paymongo':
+                            return 'border-blue-200 hover:border-blue-500 hover:bg-blue-50';
+                          case 'gcash':
+                            return 'border-blue-200 hover:border-blue-500 hover:bg-blue-50';
+                          case 'card':
+                            return 'border-purple-200 hover:border-purple-500 hover:bg-purple-50';
+                          case 'qrph':
+                            return 'border-cyan-200 hover:border-cyan-500 hover:bg-cyan-50';
+                          default:
+                            return 'border-gray-200 hover:border-gray-500 hover:bg-gray-50';
+                        }
+                      };
+
+                      return (
+                        <button
+                          key={method.method_key}
+                          onClick={() => handlePaymentMethodSelect(method.method_key)}
+                          className={`w-full p-4 border-2 rounded-lg text-left transition-all duration-200 ${getBorderColor()}`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            {getIcon()}
+                            <div>
+                              <div className="font-medium text-gray-900">{method.method_name}</div>
+                              <div className="text-sm text-gray-600">
+                                {method.method_key === 'cash' 
+                                  ? 'Physical cash payment with change calculation'
+                                  : method.method_key === 'paymongo'
+                                  ? 'Digital payment via Maya, GCash, QR Ph, and GrabPay'
+                                  : method.method_description
+                                }
+                              </div>
+                              {method.is_online && (
+                                <div className="text-xs text-blue-600 mt-1">Online Payment</div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
               )}
-              
-              <div className="space-y-3">
-                {/* Cash Payment */}
-                <button
-                  onClick={() => handlePaymentMethodSelect('cash')}
-                  className="w-full p-4 border-2 border-green-200 rounded-lg text-left hover:border-green-500 hover:bg-green-50 transition-all duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <CreditCard className="h-6 w-6 text-green-600" />
-                    <div>
-                      <div className="font-medium text-gray-900">Cash Payment</div>
-                      <div className="text-sm text-gray-600">Physical cash payment with change calculation</div>
-                    </div>
-                  </div>
-                </button>
-                
-                {/* PayMongo Online Payment */}
-                <button
-                  onClick={() => handlePaymentMethodSelect('paymongo')}
-                  className="w-full p-4 border-2 border-blue-200 rounded-lg text-left hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <QrCode className="h-6 w-6 text-blue-600" />
-                    <div>
-                      <div className="font-medium text-gray-900">PayMongo Online</div>
-                      <div className="text-sm text-gray-600">QR code payment (GCash, GrabPay, Maya, QR Ph)</div>
-                    </div>
-                  </div>
-                </button>
-              </div>
             </div>
           </div>
         </div>

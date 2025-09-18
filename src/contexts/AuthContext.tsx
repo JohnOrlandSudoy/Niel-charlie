@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, SignUpData, AuthContextType } from '../types/auth';
+import { User, LoginCredentials, SignUpData, AuthContextType, ChangePasswordData } from '../types/auth';
 import { api } from '../utils/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -123,11 +123,58 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+
+  const changePassword = async (data: ChangePasswordData): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsLoading(true);
+      console.log('AuthContext: Starting password change');
+      
+      const response = await api.auth.changePassword(data.currentPassword, data.newPassword);
+      const result = await response.json();
+      console.log('AuthContext: Change password API response:', result);
+
+      if (result.success) {
+        return { success: true, message: result.message || 'Password changed successfully' };
+      } else {
+        return { success: false, message: result.message || result.error || 'Failed to change password' };
+      }
+    } catch (error) {
+      console.error('AuthContext: Change password error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendVerification = async (email: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsLoading(true);
+      console.log('AuthContext: Starting resend verification for:', email);
+      
+      const response = await api.auth.resendVerification(email);
+      const result = await response.json();
+      console.log('AuthContext: Resend verification API response:', result);
+
+      if (result.success) {
+        return { success: true, message: result.message || 'Verification email sent successfully' };
+      } else {
+        return { success: false, message: result.message || result.error || 'Failed to send verification email' };
+      }
+    } catch (error) {
+      console.error('AuthContext: Resend verification error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     login,
     signup,
     logout,
+    changePassword,
+    resendVerification,
     isLoading,
     isAuthenticated: !!user
   };

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Percent, Search, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Percent, AlertTriangle } from 'lucide-react';
 import { Discount } from '../../types/discounts';
 import { useAvailableDiscounts } from '../../hooks/useAvailableDiscounts';
 
@@ -18,15 +18,8 @@ const DiscountSelector: React.FC<DiscountSelectorProps> = React.memo(({
   onApplyDiscount,
   isApplyingDiscount = false
 }) => {
-  const { availableDiscounts, isLoading, error, validateDiscountCode } = useAvailableDiscounts();
+  const { availableDiscounts, isLoading, error } = useAvailableDiscounts();
   const [searchQuery, setSearchQuery] = useState('');
-  const [validationResult, setValidationResult] = useState<{
-    isValid: boolean;
-    discount?: Discount;
-    discountAmount?: number;
-    message?: string;
-  } | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
 
   // Filter discounts based on search query
   const filteredDiscounts = availableDiscounts.filter(discount =>
@@ -34,40 +27,22 @@ const DiscountSelector: React.FC<DiscountSelectorProps> = React.memo(({
     discount.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Handle discount selection
-  const handleDiscountSelect = useCallback((discount: Discount) => {
+  // Handle discount selection - automatically apply when selected
+  const handleDiscountSelect = useCallback(async (discount: Discount) => {
     onDiscountSelect(discount);
     setSearchQuery('');
-    setValidationResult(null);
-  }, [onDiscountSelect]);
-
-  // Handle discount code validation
-  const handleCodeValidation = useCallback(async (code: string) => {
-    if (!code.trim()) {
-      setValidationResult(null);
-      return;
+    
+    // Automatically apply the discount when selected
+    if (onApplyDiscount) {
+      try {
+        await onApplyDiscount(discount);
+      } catch (error) {
+        console.error('Failed to auto-apply discount:', error);
+        // If auto-apply fails, still keep the discount selected for manual application
+      }
     }
+  }, [onDiscountSelect, onApplyDiscount]);
 
-    try {
-      setIsValidating(true);
-      const result = await validateDiscountCode(code, orderAmount);
-      setValidationResult(result);
-    } catch (err) {
-      setValidationResult({
-        isValid: false,
-        message: 'Failed to validate discount code'
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  }, [validateDiscountCode, orderAmount]);
-
-  // Apply validated discount
-  const handleApplyValidatedDiscount = useCallback(() => {
-    if (validationResult?.isValid && validationResult.discount) {
-      handleDiscountSelect(validationResult.discount);
-    }
-  }, [validationResult, handleDiscountSelect]);
 
   // Format discount value
   const formatDiscountValue = (discount: Discount) => {
@@ -113,64 +88,6 @@ const DiscountSelector: React.FC<DiscountSelectorProps> = React.memo(({
         </div>
       )}
 
-      {/* Manual Code Entry */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-700">
-          Enter Discount Code
-        </label>
-        <div className="flex space-x-2">
-          <div className="flex-1">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                handleCodeValidation(e.target.value);
-              }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-mono"
-              placeholder="Enter discount code (e.g., SAVE10)"
-              aria-label="Discount code"
-            />
-          </div>
-          {validationResult?.isValid && (
-            <button
-              onClick={handleApplyValidatedDiscount}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500"
-              aria-label="Apply validated discount"
-            >
-              <CheckCircle className="h-4 w-4" />
-              <span>Apply</span>
-            </button>
-          )}
-        </div>
-
-        {/* Validation Result */}
-        {validationResult && (
-          <div className={`rounded-lg p-3 ${
-            validationResult.isValid 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-red-50 border border-red-200'
-          }`}>
-            <div className="flex items-center space-x-2">
-              {validationResult.isValid ? (
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              ) : (
-                <XCircle className="h-4 w-4 text-red-600" />
-              )}
-              <span className={`text-sm ${
-                validationResult.isValid ? 'text-green-800' : 'text-red-800'
-              }`}>
-                {validationResult.message}
-              </span>
-            </div>
-            {validationResult.isValid && validationResult.discountAmount && (
-              <p className="text-sm text-green-700 mt-1">
-                Discount: ₱{validationResult.discountAmount.toFixed(2)}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* Available Discounts */}
       <div className="space-y-3">
@@ -245,38 +162,25 @@ const DiscountSelector: React.FC<DiscountSelectorProps> = React.memo(({
 
       {/* Selected Discount Summary */}
       {selectedDiscount && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-medium text-blue-900">Selected Discount</h4>
-              <p className="text-sm text-blue-700">
+              <h4 className="font-medium text-green-900">Applied Discount</h4>
+              <p className="text-sm text-green-700">
                 {selectedDiscount.code} - {selectedDiscount.name}
               </p>
+              {isApplyingDiscount && (
+                <p className="text-xs text-green-600 mt-1">Applying discount...</p>
+              )}
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold text-blue-900">
+              <p className="text-lg font-bold text-green-900">
                 -₱{calculateDiscountAmount(selectedDiscount).toFixed(2)}
               </p>
               <div className="flex items-center space-x-2 mt-2">
-                {onApplyDiscount && (
-                  <button
-                    onClick={() => onApplyDiscount(selectedDiscount)}
-                    disabled={isApplyingDiscount}
-                    className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50 flex items-center space-x-1"
-                  >
-                    {isApplyingDiscount ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                        <span>Applying...</span>
-                      </>
-                    ) : (
-                      <span>Apply Discount</span>
-                    )}
-                  </button>
-                )}
                 <button
                   onClick={() => onDiscountSelect(null)}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  className="text-xs text-green-600 hover:text-green-800 underline"
                 >
                   Remove
                 </button>

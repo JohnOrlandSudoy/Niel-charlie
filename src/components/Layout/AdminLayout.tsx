@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../Dashboard/Dashboard';
@@ -12,12 +13,44 @@ import Settings from '../Settings/Settings';
 
 const AdminLayout: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [notifications] = useState<Array<{
-    id: number;
-    type: 'info' | 'warning' | 'error';
-    message: string;
-    time: string;
-  }>>([]);
+  
+  // Responsive state management
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isLaptopScreen, setIsLaptopScreen] = useState(false);
+
+  // Handle responsive behavior
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsLaptopScreen(width >= 768 && width < 1280);
+      
+      // Auto-collapse sidebar on tablet and smaller laptops by default
+      if (width >= 768 && width < 1280) {
+        setIsSidebarCollapsed(true);
+      } else if (width >= 1280) {
+        setIsSidebarCollapsed(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setIsMobileSidebarOpen(!isMobileSidebarOpen);
+    } else {
+      setIsSidebarCollapsed(!isSidebarCollapsed);
+    }
+  };
+
+  const closeMobileSidebar = () => {
+    setIsMobileSidebarOpen(false);
+  };
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -45,41 +78,44 @@ const AdminLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
+        {/* Sidebar */}
+        <Sidebar 
+          currentPage={currentPage} 
+          onPageChange={setCurrentPage}
+          isCollapsed={isSidebarCollapsed}
+          isMobile={isMobile && isMobileSidebarOpen}
+          onToggle={toggleSidebar}
+          onClose={closeMobileSidebar}
+        />
         
-        <div className="flex-1 ml-64">
-          <Header notifications={notifications} />
+        {/* Main Content Area */}
+        <div className={`
+          flex-1 transition-all duration-300 ease-in-out
+          ${isMobile ? 'ml-0' : isSidebarCollapsed ? 'ml-16' : 'ml-64'}
+        `}>
+          {/* Mobile Header with Menu Button */}
+          {isMobile && (
+            <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between lg:hidden">
+              <button
+                onClick={toggleSidebar}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                aria-label="Open menu"
+              >
+                <Menu className="h-6 w-6 text-gray-600" />
+              </button>
+              <h1 className="text-lg font-semibold text-gray-900">Admin Dashboard</h1>
+              <div className="w-10"></div> {/* Spacer for centering */}
+            </div>
+          )}
           
-          <main className="p-6">
+          <Header isLaptopScreen={isLaptopScreen} />
+          
+          <main className="p-4 sm:p-6">
             {renderCurrentPage()}
           </main>
         </div>
       </div>
 
-      {/* Global Notifications */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {notifications.slice(0, 3).map((notification) => (
-          <div
-            key={notification.id}
-            className={`p-4 rounded-lg shadow-lg border-l-4 bg-white transition-all duration-300 transform hover:scale-105 ${
-              notification.type === 'warning'
-                ? 'border-amber-500'
-                : notification.type === 'error'
-                ? 'border-red-500'
-                : 'border-blue-500'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{notification.message}</p>
-                  <p className="text-xs text-gray-500">{notification.time}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

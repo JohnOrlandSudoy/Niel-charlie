@@ -30,25 +30,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">
             Welcome back, {user?.firstName}! Here's what's happening today.
           </p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center justify-between sm:justify-end space-x-4">
           <div className="text-right">
-            <p className="text-sm text-gray-500">Last updated</p>
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-xs sm:text-sm text-gray-500">Last updated</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-900">
               {formatLastUpdated(lastUpdated)}
             </p>
           </div>
           <button
             onClick={refresh}
             disabled={isLoading}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 disabled:opacity-50"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 disabled:opacity-50 touch-manipulation"
             title="Refresh dashboard data"
           >
             <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -58,18 +59,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
 
       <StatsCards />
       
-      <div className="grid grid-cols-1 gap-6">
+      {/* Sales Chart - Full Width */}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
         <SalesChart />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Recent Orders and Inventory Alerts */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         <RecentOrders />
         <InventoryAlerts onViewAllAlerts={onNavigateToInventory} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Stock Usage Chart and System Overview */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         <StockUsageChart />
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center space-x-3 mb-6">
             <div className="p-2 bg-blue-100 rounded-lg">
               <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

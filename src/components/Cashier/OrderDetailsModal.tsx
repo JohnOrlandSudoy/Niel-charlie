@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { X, Edit, Trash2, Clock, ChefHat, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { Order as ApiOrder, OrderItem, UpdateOrderItemRequest } from '../../types/orders';
-import { MenuItem, MenuItemIngredient } from '../../types/menu';
+import { MenuItem } from '../../types/menu';
 import { api } from '../../utils/api';
 import { storageHelpers } from '../../lib/supabase';
 
@@ -32,7 +32,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
 }) => {
   const [editForm, setEditForm] = useState<UpdateOrderItemRequest>({});
   const [menuItemDetails, setMenuItemDetails] = useState<{ [key: string]: MenuItem }>({});
-  const [menuItemIngredients, setMenuItemIngredients] = useState<{ [key: string]: MenuItemIngredient[] }>({});
   const [loadingMenuItems, setLoadingMenuItems] = useState<{ [key: string]: boolean }>({});
 
   const handleEditSubmit = useCallback((item: OrderItem) => {
@@ -87,17 +86,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
       if (menuResult.success && menuResult.data) {
         setMenuItemDetails(prev => ({ ...prev, [menuItemId]: menuResult.data }));
         
-        // Fetch ingredients for this menu item
-        try {
-          const ingredientsResponse = await api.inventory.getMenuItemIngredients(menuItemId);
-          const ingredientsResult = await ingredientsResponse.json();
-          
-          if (ingredientsResult.success && ingredientsResult.data) {
-            setMenuItemIngredients(prev => ({ ...prev, [menuItemId]: ingredientsResult.data }));
-          }
-        } catch (ingredientErr) {
-          console.warn(`Failed to fetch ingredients for menu item ${menuItemId}:`, ingredientErr);
-        }
       }
     } catch (err) {
       console.error(`Error fetching menu item details for ${menuItemId}:`, err);
@@ -248,9 +236,52 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                   </span>
                 </div>
                 <div><span className="font-medium">Payment Method:</span> {order.payment_method || 'N/A'}</div>
-                <div><span className="font-medium">Subtotal:</span> ₱{displayTotals.subtotal.toFixed(2)}</div>
-                <div><span className="font-medium">Tax:</span> ₱{displayTotals.tax.toFixed(2)}</div>
-                <div><span className="font-medium">Total:</span> ₱{displayTotals.total.toFixed(2)}</div>
+                
+                {/* Order Totals with Discount Information */}
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <div><span className="font-medium">Subtotal:</span> ₱{displayTotals.subtotal.toFixed(2)}</div>
+                  <div><span className="font-medium">Tax (12%):</span> ₱{displayTotals.tax.toFixed(2)}</div>
+                  
+                  {/* Show discount information if applied */}
+                  {(order as any).discount_applied && (order as any).discount_amount && (
+                    <>
+                      <div className="text-green-600">
+                        <span className="font-medium">Discount ({(order as any).discount_applied?.code || (order as any).discount_applied}):</span> 
+                        <span className="ml-2">-₱{((order as any).discount_amount || 0).toFixed(2)}</span>
+                      </div>
+                      {/* Show discount calculation details */}
+                      {(() => {
+                        const originalTotal = displayTotals.subtotal + displayTotals.tax;
+                        const discountAmount = (order as any).discount_amount || 0;
+                        const discountPercentage = originalTotal > 0 ? ((discountAmount / originalTotal) * 100) : 0;
+                        
+                        return (
+                          <div className="text-xs text-green-600 ml-4 mt-1">
+                            <div>Original Total: ₱{originalTotal.toFixed(2)}</div>
+                            <div>Discount: {discountPercentage.toFixed(1)}% off</div>
+                            <div>You Save: ₱{discountAmount.toFixed(2)}</div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                  
+                  <div className="border-t border-gray-200 pt-1 mt-2">
+                    <div className="font-medium text-lg">
+                      <span>Total:</span> 
+                      <span className="ml-2">₱{displayTotals.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Show savings summary if discount is applied */}
+                  {(order as any).discount_applied && (order as any).discount_amount && (
+                    <div className="bg-green-50 border border-green-200 rounded p-2 mt-2">
+                      <div className="text-xs text-green-700 text-center">
+                        💰 You saved ₱{((order as any).discount_amount || 0).toFixed(2)} with {(order as any).discount_applied?.code || (order as any).discount_applied}!
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

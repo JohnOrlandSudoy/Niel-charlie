@@ -21,11 +21,11 @@ const SalesChart: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-64">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex items-center justify-center h-48 sm:h-64">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-            <p className="text-gray-600">Loading sales data...</p>
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mx-auto mb-2" />
+            <p className="text-sm sm:text-base text-gray-600">Loading sales data...</p>
           </div>
         </div>
       </div>
@@ -46,19 +46,19 @@ const SalesChart: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-4">
         <div className="flex items-center space-x-3">
-          <BarChart3 className="h-6 w-6 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Sales Overview</h3>
+          <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Sales Overview</h3>
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex space-x-1 sm:space-x-2">
           {['week', 'month', 'year'].map((range) => (
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors duration-200 ${
+              className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors duration-200 touch-manipulation ${
                 timeRange === range
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-500 hover:text-gray-700'
@@ -70,14 +70,14 @@ const SalesChart: React.FC = () => {
         </div>
       </div>
 
-      <div className="h-64 flex items-end space-x-4">
+      <div className="h-48 sm:h-64 flex items-end space-x-2 sm:space-x-4">
         {salesData.length > 0 ? salesData.map((data, index) => (
           <div key={index} className="flex-1 flex flex-col items-center">
-            <div className="w-full flex flex-col items-center space-y-2">
+            <div className="w-full flex flex-col items-center space-y-1 sm:space-y-2">
               <div
-                className="w-full bg-blue-600 rounded-t-md transition-all duration-500 ease-out hover:bg-blue-700 cursor-pointer"
+                className="w-full bg-blue-600 rounded-t-md transition-all duration-500 ease-out hover:bg-blue-700 cursor-pointer touch-manipulation"
                 style={{
-                  height: `${maxSales > 0 ? (data.sales / maxSales) * 180 : 20}px`,
+                  height: `${maxSales > 0 ? (data.sales / maxSales) * (window.innerWidth < 640 ? 120 : 180) : 20}px`,
                   minHeight: '20px'
                 }}
                 title={`${formatCurrency(data.sales)} - ${data.orders} orders`}
@@ -92,13 +92,13 @@ const SalesChart: React.FC = () => {
           </div>
         )) : (
           <div className="flex-1 flex items-center justify-center h-full">
-            <p className="text-gray-500">No sales data available</p>
+            <p className="text-sm text-gray-500">No sales data available</p>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-4 sm:mt-6 pt-4 border-t border-gray-200 gap-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
           <div className="flex items-center space-x-2">
             <TrendingUp className="h-4 w-4 text-emerald-600" />
             <span className={`text-sm font-medium ${
@@ -110,9 +110,9 @@ const SalesChart: React.FC = () => {
           </div>
         </div>
         
-        <div className="text-right">
+        <div className="text-left sm:text-right">
           <p className="text-sm text-gray-500">Total Sales (7 days)</p>
-          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalSales)}</p>
+          <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(totalSales)}</p>
           <p className="text-xs text-gray-500">{totalOrders} orders</p>
         </div>
       </div>

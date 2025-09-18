@@ -14,6 +14,7 @@ interface EnhancedPaymentModalProps {
   onPaymentComplete: (order: ApiOrder) => void;
   onReceiptGenerated: (receiptData: any) => void;
   onApplyDiscount?: (orderId: string, discountCode: string) => Promise<any>;
+  cashOnly?: boolean;
 }
 
 interface PaymentData {
@@ -29,7 +30,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   onClose,
   onPaymentComplete,
   onReceiptGenerated,
-  onApplyDiscount
+  onApplyDiscount,
+  cashOnly = false
 }) => {
   const { paymentMethods, loading: isLoadingMethods } = usePaymentMethods();
   const {
@@ -233,10 +235,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           paymentMethod: 'cash',
           amountPaid: paymentData.amountPaid,
           change: paymentData.change,
-          isOfflineCash: paymentData.isOfflineCash
+          isOfflineCash: paymentData.isOfflineCash,
+          discountCode: (order as any).discount_applied?.code || null,
+          discountAmount: (order as any).discount_amount || 0
         };
         
         console.log('Generated cash payment receipt:', receipt);
+        console.log('Order discount data:', {
+          discount_applied: (order as any).discount_applied,
+          discount_amount: (order as any).discount_amount,
+          discountCode: (order as any).discount_applied?.code || null
+        });
 
         setReceiptData(receipt);
         setShowReceipt(true);
@@ -352,10 +361,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         amountPaid: total, // PayMongo payments are exact amount
         change: 0,
         isOfflineCash: false,
-        paymentIntentId: paymentIntent?.paymentIntentId
+        paymentIntentId: paymentIntent?.paymentIntentId,
+        discountCode: (order as any).discount_applied?.code || null,
+        discountAmount: (order as any).discount_amount || 0
       };
       
       console.log('Generated PayMongo receipt:', receipt);
+      console.log('Order discount data:', {
+        discount_applied: (order as any).discount_applied,
+        discount_amount: (order as any).discount_amount,
+        discountCode: (order as any).discount_applied?.code || null
+      });
       
       setReceiptData(receipt);
       setShowReceipt(true);
@@ -377,6 +393,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   }, [paymentIntent, handlePayMongoPaymentComplete]);
 
   const generateReceiptHTML = (receipt: any) => {
+    console.log('generateReceiptHTML called with receipt data:', receipt);
+    console.log('Discount data in receipt:', {
+      discountCode: receipt.discountCode,
+      discountAmount: receipt.discountAmount
+    });
+    
     return `
       <!DOCTYPE html>
       <html>
@@ -414,7 +436,16 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         <div class="total">
           <div class="item"><span>Subtotal:</span><span>₱${receipt.subtotal.toFixed(2)}</span></div>
           <div class="item"><span>Tax (12%):</span><span>₱${receipt.tax.toFixed(2)}</span></div>
-          <div class="item"><strong><span>Total:</span><span>₱${receipt.total.toFixed(2)}</span></strong></div>
+          ${receipt.discountCode && receipt.discountAmount ? `
+            <div class="item" style="color: #059669; border-top: 1px solid #e5e7eb; padding-top: 5px; margin-top: 5px;">
+              <span>Discount (${receipt.discountCode}):</span><span>-₱${receipt.discountAmount.toFixed(2)}</span>
+            </div>
+            <div style="font-size: 10px; color: #059669; margin-left: 10px; margin-bottom: 5px;">
+              Original Total: ₱${(receipt.subtotal + receipt.tax).toFixed(2)}<br>
+              You Saved: ₱${receipt.discountAmount.toFixed(2)}
+            </div>
+          ` : ''}
+          <div class="item" style="border-top: 2px solid #000; padding-top: 8px; margin-top: 8px;"><strong><span>Total:</span><span>₱${receipt.total.toFixed(2)}</span></strong></div>
         </div>
         
         <div class="payment-info">
@@ -423,6 +454,14 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           ${receipt.change > 0 ? `<div class="item"><span>Change:</span><span>₱${receipt.change.toFixed(2)}</span></div>` : ''}
           ${receipt.isOfflineCash ? '<p style="color: #666; font-size: 12px; margin-top: 10px;">Offline Cash Payment</p>' : ''}
         </div>
+        
+        ${receipt.discountCode && receipt.discountAmount ? `
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin: 15px 0; text-align: center;">
+            <p style="color: #059669; font-weight: bold; margin: 0; font-size: 14px;">
+              💰 You saved ₱${receipt.discountAmount.toFixed(2)} with ${receipt.discountCode}!
+            </p>
+          </div>
+        ` : ''}
         
         <div class="footer">
           <p>Thank you for your order!</p>
@@ -451,27 +490,31 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       )}
 
       {/* Main Payment Modal */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Process Payment</h2>
-            <p className="text-sm text-gray-600 mt-1">Order #{order.order_number}</p>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
+          {/* Sticky Header */}
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">Process Payment</h2>
+                <p className="text-sm text-gray-600 mt-1 truncate">Order #{order.order_number}</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
+                aria-label="Close payment modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="p-6">
+          <div className="p-4 sm:p-6">
           {!showReceipt ? (
             <>
               {/* Order Summary */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">Order Summary</h3>
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+                <h3 className="font-medium text-gray-900 mb-3 text-sm sm:text-base">Order Summary</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
@@ -485,12 +528,48 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       ₱{tax.toFixed(2)}
                     </span>
                   </div>
+                  
+                  {/* Show detailed discount information if applied */}
+                  {(order as any).discount_applied && (order as any).discount_amount && (
+                    <>
+                      <div className="border-t border-gray-200 pt-2 mt-2">
+                        <div className="flex justify-between text-green-600">
+                          <span>Discount ({(order as any).discount_applied}):</span>
+                          <span>-₱{((order as any).discount_amount || 0).toFixed(2)}</span>
+                        </div>
+                        {/* Show discount calculation details */}
+                        {(() => {
+                          const originalTotal = subtotal + tax;
+                          const discountAmount = (order as any).discount_amount || 0;
+                          const discountPercentage = originalTotal > 0 ? ((discountAmount / originalTotal) * 100) : 0;
+                          
+                          return (
+                            <div className="text-xs text-green-600 mt-1 pl-2">
+                              <div>Original Total: ₱{originalTotal.toFixed(2)}</div>
+                              <div>Discount: {discountPercentage.toFixed(1)}% off</div>
+                              <div>You Save: ₱{discountAmount.toFixed(2)}</div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </>
+                  )}
+                  
                   <div className="flex justify-between font-medium text-lg border-t pt-2">
                     <span>Total:</span>
                     <span className={total === 0 ? 'text-red-600 font-bold' : ''}>
                       ₱{total.toFixed(2)}
                     </span>
                   </div>
+                  
+                  {/* Show savings summary if discount is applied */}
+                  {(order as any).discount_applied && (order as any).discount_amount && (
+                    <div className="bg-green-50 border border-green-200 rounded p-2 mt-2">
+                      <div className="text-xs text-green-700 text-center">
+                        💰 You saved ₱{((order as any).discount_amount || 0).toFixed(2)} with {(order as any).discount_applied}!
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {total === 0 && (
                   <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
@@ -511,8 +590,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               )}
 
               {/* Payment Method Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+              <div className="mb-4 sm:mb-6">
+                <label className="block text-sm sm:text-base font-medium text-gray-700 mb-3">
                   Payment Method
                 </label>
                 {isLoadingMethods ? (
@@ -522,18 +601,28 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Online Payment Methods */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                        <QrCode className="h-4 w-4 mr-2 text-blue-600" />
-                        Online Payments
-                      </h4>
-                      <div className="grid grid-cols-1 gap-3">
-                        {paymentMethods.filter(method => method.is_online).map((method) => (
+                    {/* Check if any payment methods are available */}
+                    {paymentMethods.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <CreditCard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p className="text-lg font-medium">No Payment Methods Available</p>
+                        <p className="text-sm mt-1">Please enable payment methods in Settings to process payments.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Online Payment Methods - Only show if not cashOnly */}
+                        {!cashOnly && paymentMethods.filter(method => method.is_online).length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                              <QrCode className="h-4 w-4 mr-2 text-blue-600" />
+                              Online Payments
+                            </h4>
+                            <div className="grid grid-cols-1 gap-3">
+                              {paymentMethods.filter(method => method.is_online).map((method) => (
                           <button
                             key={method.method_key}
                             onClick={() => handlePaymentMethodChange(method.method_key)}
-                            className={`p-3 border-2 rounded-lg text-left transition-all duration-200 ${
+                            className={`p-3 sm:p-4 border-2 rounded-lg text-left transition-all duration-200 touch-manipulation min-h-[60px] ${
                               paymentData.paymentMethod === method.method_key
                                 ? 'border-blue-500 bg-blue-50'
                                 : 'border-gray-200 hover:border-gray-300'
@@ -547,38 +636,53 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                               )}
                               <span className="font-medium">{method.method_name}</span>
                             </div>
-                            <p className="text-xs text-gray-600 mt-1">{method.method_description}</p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {method.method_key === 'paymongo' 
+                                ? 'Digital payment via Maya, GCash, QR Ph, and GrabPay'
+                                : method.method_description
+                              }
+                            </p>
                             {method.method_key === 'paymongo' && (
                               <p className="text-xs text-blue-600 mt-1 font-medium">✓ QR Code Generation</p>
                             )}
                           </button>
                         ))}
-                      </div>
-                    </div>
-
-                    {/* Cash Payment Method */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                        <DollarSign className="h-4 w-4 mr-2 text-green-600" />
-                        Cash Payment
-                      </h4>
-                      <div className="grid grid-cols-1 gap-3">
-                        <button
-                          onClick={() => handlePaymentMethodChange('cash')}
-                          className={`p-3 border-2 rounded-lg text-left transition-all duration-200 ${
-                            paymentData.paymentMethod === 'cash'
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="h-4 w-4" />
-                            <span className="font-medium">Cash Payment</span>
+                            </div>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">Physical cash payment with change calculation</p>
-                        </button>
+                        )}
+
+                        {/* Cash Payment Method - Only show if cash is available */}
+                    {paymentMethods.some(method => method.method_key === 'cash') && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                          <DollarSign className="h-4 w-4 mr-2 text-green-600" />
+                          {cashOnly ? 'Cash Payment' : 'Cash Payment'}
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3">
+                          <button
+                            onClick={() => handlePaymentMethodChange('cash')}
+                            className={`p-3 sm:p-4 border-2 rounded-lg text-left transition-all duration-200 touch-manipulation min-h-[60px] ${
+                              paymentData.paymentMethod === 'cash'
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <DollarSign className="h-4 w-4" />
+                              <span className="font-medium">Cash Payment</span>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {cashOnly 
+                                ? 'Physical cash payment with change calculation' 
+                                : 'Physical cash payment with change calculation'
+                              }
+                            </p>
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -595,7 +699,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     min="0"
                     value={paymentData.amountPaid || ''}
                     onChange={(e) => handleAmountPaidChange(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                     placeholder="Enter amount paid"
                     required
                   />
@@ -637,7 +741,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               )}
 
               {/* Action Buttons */}
-              <div className="flex space-x-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleProcessPayment}
                   disabled={
@@ -645,7 +749,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     !paymentData.paymentMethod || 
                     (paymentData.paymentMethod === 'cash' && paymentData.amountPaid < total)
                   }
-                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`flex-1 px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] text-sm sm:text-base ${
                     paymentData.paymentMethod === 'paymongo' 
                       ? 'bg-orange-600 hover:bg-orange-700 text-white'
                       : 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -670,7 +774,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  className="w-full sm:w-auto px-4 py-2 sm:py-2.5 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 touch-manipulation min-h-[44px] text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -686,10 +790,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               </div>
 
               {/* Receipt Actions */}
-              <div className="flex space-x-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handlePrintReceipt}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors duration-200"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 sm:py-2.5 rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors duration-200 touch-manipulation min-h-[44px] text-sm sm:text-base"
                 >
                   <Printer className="h-4 w-4" />
                   <span>Print Receipt</span>
@@ -697,7 +801,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 
                 <button
                   onClick={handleDownloadReceipt}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2 transition-colors duration-200"
+                  className="flex-1 bg-green-600 text-white px-4 py-2 sm:py-2.5 rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2 transition-colors duration-200 touch-manipulation min-h-[44px] text-sm sm:text-base"
                 >
                   <Download className="h-4 w-4" />
                   <span>Download</span>
@@ -708,7 +812,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               <div className="border-t pt-6">
                 <button
                   onClick={handleFinalizeOrder}
-                  className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2 transition-colors duration-200 font-medium"
+                  className="w-full bg-green-600 text-white px-4 py-3 sm:py-3.5 rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2 transition-colors duration-200 font-medium touch-manipulation min-h-[48px] text-sm sm:text-base"
                 >
                   <CheckCircle className="h-5 w-5" />
                   <span>Finalize Order</span>

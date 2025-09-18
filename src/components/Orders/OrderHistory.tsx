@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../utils/api';
-import { Order as ApiOrder, OrderStats, PaginatedOrderResponse } from '../../types/orders';
+import { Order as ApiOrder, PaginatedOrderResponse } from '../../types/orders';
 
 const OrderHistory: React.FC = () => {
   const [orders, setOrders] = useState<ApiOrder[]>([]);
@@ -434,9 +434,9 @@ const OrderHistory: React.FC = () => {
           hasCustomizations: !!items[0].customizations,
           customizationsType: typeof items[0].customizations,
           customizationsIsArray: Array.isArray(items[0].customizations),
-          hasAddons: !!items[0].addons,
-          addonsType: typeof items[0].addons,
-          addonsIsArray: Array.isArray(items[0].addons)
+          hasAddons: !!(items[0] as any).addons,
+          addonsType: typeof (items[0] as any).addons,
+          addonsIsArray: Array.isArray((items[0] as any).addons)
         });
       }
 
@@ -581,11 +581,11 @@ const OrderHistory: React.FC = () => {
                   return `
                     <tr>
                       <td>
-                        ${item.menu_items?.name || item.menu_item?.name || 'Unknown Item'}
+                        ${(item as any).menu_items?.name || item.menu_item?.name || 'Unknown Item'}
                         ${item.customizations && safeMapToString(item.customizations) ? 
                           `<br><small>Customizations: ${safeMapToString(item.customizations)}</small>` : ''}
-                        ${item.addons && safeMapToString(item.addons) ? 
-                          `<br><small>Add-ons: ${safeMapToString(item.addons)}</small>` : ''}
+                        ${(item as any).addons && safeMapToString((item as any).addons) ? 
+                          `<br><small>Add-ons: ${safeMapToString((item as any).addons)}</small>` : ''}
                         ${item.special_instructions ? 
                           `<br><small><em>Note: ${item.special_instructions}</em></small>` : ''}
                       </td>
@@ -718,13 +718,14 @@ const OrderHistory: React.FC = () => {
   const pendingPayments = orders.filter(o => o.payment_status === 'unpaid' && o.status === 'completed').length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Order History</h1>
-          <p className="text-gray-600 mt-1">View and manage all customer orders and transactions</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Order History</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">View and manage all customer orders and transactions</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <button 
             onClick={async () => {
               console.log('🔄 Refreshing order items...');
@@ -735,15 +736,17 @@ const OrderHistory: React.FC = () => {
                 console.error('❌ Error refreshing order items:', err);
               }
             }}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors duration-200"
+            className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base"
             title="Refresh order items from kitchen endpoint"
           >
             <Package className="h-4 w-4" />
-            <span>Refresh Items</span>
+            <span className="hidden sm:inline">Refresh Items</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 transition-colors duration-200">
+          <button className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base">
             <Download className="h-4 w-4" />
-            <span>Export Report</span>
+            <span className="hidden sm:inline">Export Report</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
@@ -758,161 +761,68 @@ const OrderHistory: React.FC = () => {
         </div>
       )}
 
-      {/* Debug Section - Only show in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-900">Debug Information</h3>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => {
-                  console.log('🔍 Current orders state:', orders);
-                  console.log('🔍 Orders with items:', orders.map(order => ({
-                    id: order.id,
-                    order_number: order.order_number,
-                    itemsCount: order.order_items?.length || order.items?.length || 0,
-                    hasOrderItems: !!order.order_items,
-                    hasItems: !!order.items,
-                    order_items: order.order_items,
-                    items: order.items
-                  })));
-                }}
-                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 border border-blue-300 rounded hover:bg-blue-200"
-              >
-                Debug Orders State
-              </button>
-              <button
-                onClick={async () => {
-                  console.log('🧪 Testing API endpoints...');
-                  try {
-                    // Test regular orders endpoint
-                    const ordersResponse = await api.orders.getAll({ page: 1, limit: 5 });
-                    const ordersResult = await ordersResponse.json();
-                    console.log('📋 Regular orders result:', ordersResult);
-                    
-                    // Test kitchen orders endpoint
-                    const kitchenResponse = await api.orders.getKitchenOrders();
-                    const kitchenResult = await kitchenResponse.json();
-                    console.log('🍳 Kitchen orders result:', kitchenResult);
-                    
-                    if (kitchenResult.success && kitchenResult.data) {
-                      console.log('✅ Kitchen orders endpoint working');
-                      console.log('📦 Sample order with items:', kitchenResult.data[0]);
-                    }
-                  } catch (err) {
-                    console.error('❌ Error testing endpoints:', err);
-                  }
-                }}
-                className="px-3 py-1 text-xs font-medium text-purple-600 bg-purple-100 border border-purple-300 rounded hover:bg-purple-200"
-              >
-                Test API Endpoints
-              </button>
-              <button
-                onClick={() => {
-                  console.log('🖨️ Testing print functionality...');
-                  const testOrder = orders.find(order => order.status === 'ready');
-                  if (testOrder) {
-                    console.log('🧪 Testing print with ready order:', testOrder.order_number);
-                    handlePrintOrder(testOrder);
-                  } else {
-                    console.log('⚠️ No ready orders found for testing');
-                    const anyOrder = orders[0];
-                    if (anyOrder) {
-                      console.log('🧪 Testing print with first available order:', anyOrder.order_number);
-                      handlePrintOrder(anyOrder);
-                    } else {
-                      console.log('❌ No orders available for testing');
-                    }
-                  }
-                }}
-                className="px-3 py-1 text-xs font-medium text-orange-600 bg-orange-100 border border-orange-300 rounded hover:bg-orange-200"
-              >
-                Test Print Function
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="bg-white p-3 rounded border">
-              <p className="font-medium text-gray-900 mb-1">Orders Loaded</p>
-              <p className="text-gray-600">{orders.length}</p>
-            </div>
-            <div className="bg-white p-3 rounded border">
-              <p className="font-medium text-gray-900 mb-1">Orders with Items</p>
-              <p className="text-gray-600">
-                {orders.filter(o => (o.order_items && o.order_items.length > 0) || (o.items && o.items.length > 0)).length}
-              </p>
-            </div>
-            <div className="bg-white p-3 rounded border">
-              <p className="font-medium text-gray-900 mb-1">Orders without Items</p>
-              <p className="text-gray-600">
-                {orders.filter(o => (!o.order_items || o.order_items.length === 0) && (!o.items || o.items.length === 0)).length}
-              </p>
-            </div>
-          </div>
+      {/* Summary Stats - Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <p className="text-xs sm:text-sm font-medium text-gray-600">Total Revenue</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">₱{totalRevenue.toLocaleString()}</p>
         </div>
-      )}
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">₱{totalRevenue.toLocaleString()}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <p className="text-xs sm:text-sm font-medium text-gray-600">Total Orders</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{totalOrders}</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600">Total Orders</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{totalOrders}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <p className="text-xs sm:text-sm font-medium text-gray-600">Completed</p>
+          <p className="text-lg sm:text-2xl font-bold text-emerald-600 mt-1">{completedOrders}</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600">Completed</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{completedOrders}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600">Pending Payments</p>
-          <p className="text-2xl font-bold text-red-600 mt-1">{pendingPayments}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <p className="text-xs sm:text-sm font-medium text-gray-600">Pending Payments</p>
+          <p className="text-lg sm:text-2xl font-bold text-red-600 mt-1">{pendingPayments}</p>
         </div>
       </div>
 
-      {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search orders by ID or customer..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+      {/* Search and Filter - Responsive */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search orders by ID or customer..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                />
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="preparing">Preparing</option>
-              <option value="ready">Ready</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
             
-            <select
-              value={filterType}
-              onChange={(e) => handleFilterChange('type', e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Types</option>
-              <option value="dine_in">Dine-in</option>
-              <option value="takeout">Takeout</option>
-            </select>
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-400" />
+              <select
+                value={filterStatus}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 sm:px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="preparing">Preparing</option>
+                <option value="ready">Ready</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              
+              <select
+                value={filterType}
+                onChange={(e) => handleFilterChange('type', e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 sm:px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+              >
+                <option value="all">All Types</option>
+                <option value="dine_in">Dine-in</option>
+                <option value="takeout">Takeout</option>
+              </select>
+            </div>
           </div>
         </div>
         
@@ -973,105 +883,98 @@ const OrderHistory: React.FC = () => {
         )}
       </div>
 
-      {/* Orders Table */}
+      {/* Orders Display - Responsive */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <span className="ml-2 text-gray-600">Loading orders...</span>
-            </div>
-          ) : orders.length > 0 ? (
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="w-12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <input
-                      type="checkbox"
-                      checked={selectedOrders.length === orders.length && orders.length > 0}
-                      onChange={handleSelectAll}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                  </th>
-                  <th className="w-48 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order Details
-                  </th>
-                  <th className="w-48 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="w-64 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Items
-                  </th>
-                  <th className="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment
-                  </th>
-                  <th className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200" style={{ minHeight: '80px' }}>
-                    <td className="w-12 px-6 py-4 whitespace-nowrap">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-2 text-gray-600">Loading orders...</span>
+          </div>
+        ) : orders.length > 0 ? (
+          <>
+            {/* Desktop Table View (1024px+) */}
+            <div className="hidden xl:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <input
                         type="checkbox"
-                        checked={selectedOrders.includes(order.id)}
-                        onChange={() => handleOrderSelect(order.id)}
+                        checked={selectedOrders.length === orders.length && orders.length > 0}
+                        onChange={handleSelectAll}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                    </td>
-                    <td className="w-48 px-6 py-4">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <div className="text-sm font-medium text-gray-900 truncate" title={order.order_number}>
-                            {order.order_number}
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order Details
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Items
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {orders.map((order) => (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
+                      <td className="w-12 px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => handleOrderSelect(order.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <div className="text-sm font-medium text-gray-900">
+                              {order.order_number}
+                            </div>
+                            {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <Package className="h-3 w-3 mr-1" />
+                                {order.order_items?.length || order.items?.length || 0} items
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                No items
+                              </span>
+                            )}
                           </div>
-                          {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
-                              <Package className="h-3 w-3 mr-1" />
-                              {order.order_items?.length || order.items?.length || 0} items
+                          <div className="text-sm text-gray-500">
+                            {new Date(order.created_at).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            <span className={`px-2 py-1 rounded-full ${
+                              order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                            }`}>
+                              {order.order_type.replace('_', ' ')}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              No items
-                            </span>
-                          )}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500 truncate" title={new Date(order.created_at).toLocaleString()}>
-                          {new Date(order.created_at).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          <span className={`px-2 py-1 rounded-full ${
-                            order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {order.order_type.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="w-48 px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        <div 
-                          className="truncate font-medium" 
-                          title={order.customer_name || 'Walk-in Customer'}
-                          style={{ maxWidth: '100%' }}
-                        >
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
                           {order.customer_name || 'Walk-in Customer'}
                         </div>
                         {order.customer_phone && (
-                          <div 
-                            className="text-xs text-gray-500 truncate mt-1" 
-                            title={order.customer_phone}
-                            style={{ maxWidth: '100%' }}
-                          >
+                          <div className="text-sm text-gray-500">
                             {order.customer_phone}
                           </div>
                         )}
@@ -1115,102 +1018,339 @@ const OrderHistory: React.FC = () => {
                             )}
                           </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="w-64 px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {order.order_items && order.order_items.length > 0 ? (
-                          <div className="space-y-1" title={`${order.order_items.length} items in this order`}>
-                            {order.order_items.slice(0, 2).map((item, index) => (
-                              <div key={index} className="flex items-center space-x-2 group">
-                                <span className="text-gray-600 flex-shrink-0">•</span>
-                                <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
-                                  {item.menu_items?.name || item.menu_item?.name || 'Unknown Item'}
-                                </span>
-                                <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
-                                {item.unit_price && (
-                                  <span className="text-xs text-gray-400 flex-shrink-0">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
-                                )}
-                              </div>
-                            ))}
-                            {order.order_items.length > 2 && (
-                              <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
-                                +{order.order_items.length - 2} more item{order.order_items.length - 2 !== 1 ? 's' : ''}
-                              </div>
-                            )}
-                          </div>
-                        ) : order.items && order.items.length > 0 ? (
-                          <div className="space-y-1" title={`${order.items.length} items in this order`}>
-                            {order.items.slice(0, 2).map((item, index) => (
-                              <div key={index} className="flex items-center space-x-2 group">
-                                <span className="text-gray-600 flex-shrink-0">•</span>
-                                <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
-                                  {item.menu_item?.name || 'Unknown Item'}
-                                </span>
-                                <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
-                              </div>
-                            ))}
-                            {order.items.length > 2 && (
-                              <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
-                                +{order.items.length - 2} more item{order.items.length - 2 !== 1 ? 's' : ''}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-2 text-gray-400" title="Click 'Refresh Items' to load order details">
-                            <Package className="h-4 w-4 flex-shrink-0" />
-                            <span className="text-sm">No items found</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {order.order_items && order.order_items.length > 0 ? (
+                            <div className="space-y-1" title={`${order.order_items.length} items in this order`}>
+                              {order.order_items.slice(0, 2).map((item, index) => (
+                                <div key={index} className="flex items-center space-x-2 group">
+                                  <span className="text-gray-600 flex-shrink-0">•</span>
+                                  <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
+                                    {(item as any).menu_items?.name || item.menu_item?.name || 'Unknown Item'}
+                                  </span>
+                                  <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
+                                  {item.unit_price && (
+                                    <span className="text-xs text-gray-400 flex-shrink-0">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
+                                  )}
+                                </div>
+                              ))}
+                              {order.order_items.length > 2 && (
+                                <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
+                                  +{order.order_items.length - 2} more item{order.order_items.length - 2 !== 1 ? 's' : ''}
+                                </div>
+                              )}
+                            </div>
+                          ) : order.items && order.items.length > 0 ? (
+                            <div className="space-y-1" title={`${order.items.length} items in this order`}>
+                              {order.items.slice(0, 2).map((item, index) => (
+                                <div key={index} className="flex items-center space-x-2 group">
+                                  <span className="text-gray-600 flex-shrink-0">•</span>
+                                  <span className="font-medium group-hover:text-blue-600 transition-colors truncate">
+                                    {item.menu_item?.name || 'Unknown Item'}
+                                  </span>
+                                  <span className="text-gray-500 flex-shrink-0">x{item.quantity}</span>
+                                </div>
+                              ))}
+                              {order.items.length > 2 && (
+                                <div className="text-xs text-blue-600 font-medium hover:text-blue-800 cursor-pointer">
+                                  +{order.items.length - 2} more item{order.items.length - 2 !== 1 ? 's' : ''}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2 text-gray-400" title="Click 'Refresh Items' to load order details">
+                              <Package className="h-4 w-4 flex-shrink-0" />
+                              <span className="text-sm">No items found</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</div>
+                        {order.payment_method && (
+                          <div className="text-xs text-gray-500 truncate" title={order.payment_method}>
+                            {order.payment_method}
                           </div>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
+                          {order.status}
+                        </span>
+                        {order.status === 'completed' && (
+                          <div className="text-xs text-gray-500 mt-1 truncate" title={`Completed: ${new Date(order.updated_at).toLocaleString()}`}>
+                            Completed: {new Date(order.updated_at).toLocaleString()}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
+                          {order.payment_status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => handlePrintOrder(order)}
+                            className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                            title="Print Order"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                          {canCancelOrder(order) && (
+                            <button
+                              onClick={() => {
+                                setCancelOrderId(order.id);
+                                setShowCancelModal(true);
+                              }}
+                              className="text-orange-600 hover:text-orange-700 p-1 rounded" 
+                              title="Cancel Order"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                          {canDeleteOrder(order) && (
+                            <button
+                              onClick={() => {
+                                setDeleteOrderId(order.id);
+                                if (canForceDeleteOrder(order)) {
+                                  setShowForceDeleteWarning(true);
+                                } else {
+                                  setShowDeleteModal(true);
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700 p-1 rounded" 
+                              title={canForceDeleteOrder(order) ? "Force Delete Order" : "Delete Order"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                          {!canDeleteOrder(order) && order.payment_status === 'paid' && (
+                            <span className="text-xs text-gray-400" title="Cannot delete paid orders - must refund first">
+                              Protected
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Laptop Table View (768px - 1023px) */}
+            <div className="hidden lg:block xl:hidden overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-12 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.length === orders.length && orders.length > 0}
+                        onChange={handleSelectAll}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order Details
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {orders.map((order) => (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
+                      <td className="w-12 px-4 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => handleOrderSelect(order.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <div className="text-sm font-medium text-gray-900">
+                              {order.order_number}
+                            </div>
+                            {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <Package className="h-3 w-3 mr-1" />
+                                {order.order_items?.length || order.items?.length || 0}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                0
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(order.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            <span className={`px-2 py-1 rounded-full ${
+                              order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                            }`}>
+                              {order.order_type.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {order.customer_name || 'Walk-in Customer'}
+                        </div>
+                        {order.customer_phone && (
+                          <div className="text-xs text-gray-500">
+                            {order.customer_phone}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</div>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
+                          {order.payment_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-1">
+                          <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => handlePrintOrder(order)}
+                            className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                            title="Print Order"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                          {canDeleteOrder(order) && (
+                            <button
+                              onClick={() => {
+                                setDeleteOrderId(order.id);
+                                if (canForceDeleteOrder(order)) {
+                                  setShowForceDeleteWarning(true);
+                                } else {
+                                  setShowDeleteModal(true);
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700 p-1 rounded" 
+                              title="Delete Order"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Tablet Card View (640px - 1023px) */}
+            <div className="hidden md:block lg:hidden">
+              <div className="divide-y divide-gray-200">
+                {orders.map((order) => (
+                  <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors duration-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => handleOrderSelect(order.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <h3 className="text-sm font-medium text-gray-900 truncate">
+                              {order.order_number}
+                            </h3>
+                            {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
+                                <Package className="h-3 w-3 mr-1" />
+                                {order.order_items?.length || order.items?.length || 0} items
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                No items
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                              <p className="text-xs text-gray-500">Customer</p>
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {order.customer_name || 'Walk-in Customer'}
+                              </p>
+                              {order.customer_phone && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  {order.customer_phone}
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Total</p>
+                              <p className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</p>
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
+                                {order.payment_status}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
+                                {order.status}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                              }`}>
+                                {order.order_type.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="w-24 px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</div>
-                      {order.payment_method && (
-                        <div className="text-xs text-gray-500 truncate" title={order.payment_method}>
-                          {order.payment_method}
-                        </div>
-                      )}
-                    </td>
-                    <td className="w-32 px-6 py-4">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
-                        {order.status}
-                      </span>
-                      {order.status === 'completed' && (
-                        <div className="text-xs text-gray-500 mt-1 truncate" title={`Completed: ${new Date(order.updated_at).toLocaleString()}`}>
-                          Completed: {new Date(order.updated_at).toLocaleString()}
-                        </div>
-                      )}
-                    </td>
-                    <td className="w-24 px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
-                        {order.payment_status}
-                      </span>
-                    </td>
-                    <td className="w-32 px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
+                      
+                      <div className="flex items-center space-x-1 ml-4">
+                        <button className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" title="View Details">
                           <Eye className="h-4 w-4" />
                         </button>
                         <button 
                           onClick={() => handlePrintOrder(order)}
-                          className="text-gray-600 hover:text-gray-700 p-1 rounded" 
+                          className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 
                           title="Print Order"
                         >
                           <Printer className="h-4 w-4" />
                         </button>
-                        {canCancelOrder(order) && (
-                          <button
-                            onClick={() => {
-                              setCancelOrderId(order.id);
-                              setShowCancelModal(true);
-                            }}
-                            className="text-orange-600 hover:text-orange-700 p-1 rounded" 
-                            title="Cancel Order"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
                         {canDeleteOrder(order) && (
                           <button
                             onClick={() => {
@@ -1221,57 +1361,162 @@ const OrderHistory: React.FC = () => {
                                 setShowDeleteModal(true);
                               }
                             }}
-                            className="text-red-600 hover:text-red-700 p-1 rounded" 
-                            title={canForceDeleteOrder(order) ? "Force Delete Order" : "Delete Order"}
+                            className="text-red-600 hover:text-red-700 p-2 rounded-lg hover:bg-red-50" 
+                            title="Delete Order"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
-                        {!canDeleteOrder(order) && order.payment_status === 'paid' && (
-                          <span className="text-xs text-gray-400" title="Cannot delete paid orders - must refund first">
-                            Protected
-                          </span>
-                        )}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="text-center py-12">
-              <div className="text-gray-500 text-lg">No orders found</div>
-              <div className="text-gray-400 mt-1">Try adjusting your search or filters</div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Mobile Card View (< 640px) */}
+            <div className="md:hidden">
+              <div className="divide-y divide-gray-200">
+                {orders.map((order) => (
+                  <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors duration-200">
+                    <div className="flex items-start space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.includes(order.id)}
+                        onChange={() => handleOrderSelect(order.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-medium text-gray-900 truncate">
+                            {order.order_number}
+                          </h3>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
+                            {order.status}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2 mb-3">
+                          <div>
+                            <p className="text-xs text-gray-500">Customer</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {order.customer_name || 'Walk-in Customer'}
+                            </p>
+                            {order.customer_phone && (
+                              <p className="text-xs text-gray-500">
+                                {order.customer_phone}
+                              </p>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-gray-500">Total</p>
+                              <p className="text-sm font-bold text-gray-900">₱{order.total_amount.toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Payment</p>
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
+                                {order.payment_status}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <Package className="h-3 w-3 mr-1" />
+                                  {order.order_items?.length || order.items?.length || 0} items
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  No items
+                                </span>
+                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                              }`}>
+                                {order.order_type.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <button className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" title="View Details">
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => handlePrintOrder(order)}
+                              className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 
+                              title="Print Order"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            {canDeleteOrder(order) && (
+                              <button
+                                onClick={() => {
+                                  setDeleteOrderId(order.id);
+                                  if (canForceDeleteOrder(order)) {
+                                    setShowForceDeleteWarning(true);
+                                  } else {
+                                    setShowDeleteModal(true);
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-700 p-2 rounded-lg hover:bg-red-50" 
+                                title="Delete Order"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <div className="text-gray-500 text-lg">No orders found</div>
+            <div className="text-gray-400 mt-1">Try adjusting your search or filters</div>
+          </div>
+        )}
       </div>
 
-      {/* Pagination Controls */}
+      {/* Pagination Controls - Responsive */}
       {!isLoading && totalPages > 1 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-sm text-gray-700 text-center sm:text-left">
               Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-center space-x-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
               >
                 Previous
               </button>
               
               <div className="flex space-x-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                {Array.from({ length: Math.min(window.innerWidth < 640 ? 3 : 5, totalPages) }, (_, i) => {
                   const pageNum = i + 1;
                   return (
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                      className={`px-3 py-2 text-sm font-medium rounded-lg touch-manipulation ${
                         currentPage === pageNum
                           ? 'bg-blue-600 text-white'
                           : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
@@ -1286,7 +1531,7 @@ const OrderHistory: React.FC = () => {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
               >
                 Next
               </button>

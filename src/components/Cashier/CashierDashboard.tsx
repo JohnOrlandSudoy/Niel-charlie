@@ -231,24 +231,30 @@ const CashierDashboard: React.FC = React.memo(() => {
   }, []);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Cashier Dashboard</h1>
-          <p className="text-gray-600 mt-1">
-            Welcome back, {user?.email}! Process orders and manage transactions efficiently.
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-        <button
-          onClick={() => setShowNewOrderModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Create new order"
-        >
-            <Plus className="h-5 w-5" aria-hidden="true" />
-          <span>New Order</span>
-        </button>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+        <div className="px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                Cashier Dashboard
+              </h1>
+              <p className="text-sm sm:text-base text-gray-600 mt-1 truncate">
+                Welcome back, {user?.email}! Process orders efficiently.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <button
+                onClick={() => setShowNewOrderModal(true)}
+                className="bg-blue-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-blue-700 flex items-center space-x-1 sm:space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 touch-manipulation min-h-[44px]"
+                aria-label="Create new order"
+              >
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+                <span className="text-sm sm:text-base font-medium">New Order</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -263,18 +269,18 @@ const CashierDashboard: React.FC = React.memo(() => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" role="region" aria-label="Order statistics">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6" role="region" aria-label="Order statistics">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" role="article" aria-label={`${stat.label}: ${stat.value}`}>
+            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200 touch-manipulation" role="article" aria-label={`${stat.label}: ${stat.value}`}>
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{stat.label}</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1 truncate">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-full bg-${stat.color}-100`}>
-                  <Icon className={`h-6 w-6 text-${stat.color}-600`} aria-hidden="true" />
+                <div className={`p-2 sm:p-3 rounded-full bg-${stat.color}-100 flex-shrink-0`}>
+                  <Icon className={`h-5 w-5 sm:h-6 sm:w-6 text-${stat.color}-600`} aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -284,22 +290,22 @@ const CashierDashboard: React.FC = React.memo(() => {
 
       {/* Inventory Alerts */}
       {(inventoryStats.outOfStockItems > 0 || inventoryStats.lowStockItems > 0) && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" role="region" aria-label="Inventory alerts">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6" role="region" aria-label="Inventory alerts">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Inventory Alerts</h2>
-            <Package className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Inventory Alerts</h2>
+            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-gray-400" aria-hidden="true" />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {inventoryStats.outOfStockItems > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 touch-manipulation">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-red-100 rounded-lg">
+                  <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
                     <XCircle className="h-5 w-5 text-red-600" aria-hidden="true" />
                   </div>
-                  <div>
-                    <h3 className="text-red-900 font-medium">Out of Stock Items</h3>
-                    <p className="text-red-700 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-red-900 font-medium text-sm sm:text-base">Out of Stock Items</h3>
+                    <p className="text-red-700 text-xs sm:text-sm">
                       {inventoryStats.outOfStockItems} ingredient(s) are completely out of stock
                     </p>
                   </div>
@@ -308,14 +314,14 @@ const CashierDashboard: React.FC = React.memo(() => {
             )}
             
             {inventoryStats.lowStockItems > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 touch-manipulation">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-amber-100 rounded-lg">
+                  <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
                     <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />
                   </div>
-                  <div>
-                    <h3 className="text-amber-900 font-medium">Low Stock Items</h3>
-                    <p className="text-amber-700 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-amber-900 font-medium text-sm sm:text-base">Low Stock Items</h3>
+                    <p className="text-amber-700 text-xs sm:text-sm">
                       {inventoryStats.lowStockItems} ingredient(s) are running low
                     </p>
                   </div>
@@ -325,7 +331,7 @@ const CashierDashboard: React.FC = React.memo(() => {
           </div>
           
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-blue-800 text-sm">
+            <p className="text-blue-800 text-xs sm:text-sm">
               <strong>Note:</strong> Some menu items may be unavailable or limited due to ingredient shortages. 
               Check stock levels before creating new orders.
             </p>
@@ -334,17 +340,17 @@ const CashierDashboard: React.FC = React.memo(() => {
       )}
 
       {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
               <input
                 type="text"
                 placeholder="Search by order number or customer name..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation"
                 aria-label="Search orders"
               />
             </div>
@@ -353,7 +359,7 @@ const CashierDashboard: React.FC = React.memo(() => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+              className="border border-gray-300 rounded-lg px-3 py-2 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm sm:text-base h-12 sm:h-14 touch-manipulation min-w-[140px]"
               aria-label="Filter orders by status"
             >
               <option value="all">All Status</option>
@@ -369,8 +375,8 @@ const CashierDashboard: React.FC = React.memo(() => {
 
       {/* Orders List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">All Orders</h2>
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">All Orders</h2>
         </div>
 
         {isLoading ? (
@@ -381,19 +387,126 @@ const CashierDashboard: React.FC = React.memo(() => {
         ) : finalFilteredOrders.length > 0 ? (
           <div className="divide-y divide-gray-200" role="list" aria-label="Order list">
             {finalFilteredOrders.map((order) => (
-              <div key={order.id} className="p-6 hover:bg-gray-50 transition-colors duration-200" role="listitem">
-              <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4">
+              <div key={order.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors duration-200 touch-manipulation" role="listitem">
+                {/* Desktop/Laptop Layout (1024px+) */}
+                <div className="hidden lg:block">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900">
+                            Order #{order.order_number}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {order.customer_name || 'Walk-in Customer'}
+                            {order.customer_phone && ` • ${order.customer_phone}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(order.payment_status)}`}>
+                            {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 flex items-center space-x-6 text-sm text-gray-500">
+                        <span>Type: {order.order_type.replace('_', ' ').toUpperCase()}</span>
+                        {order.table_number && <span>Table: {order.table_number}</span>}
+                        <span>Total: ₱{calculateOrderTotal(order).toFixed(2)}</span>
+                        {order.discount_applied && (
+                          <span className="text-green-600 font-medium">
+                            Discount: {order.discount_applied.code} (-₱{order.discount_amount?.toFixed(2) || '0.00'})
+                          </span>
+                        )}
+                        {/* Ingredient Status Indicator */}
+                        {(() => {
+                          const orderItems = (order as any).order_items || order.items || [];
+                          const hasLowStock = orderItems.some((item: any) => 
+                            item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'low_stock')
+                          );
+                          const hasOutOfStock = orderItems.some((item: any) => 
+                            item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'out_of_stock')
+                          );
+                          
+                          if (hasOutOfStock) {
+                            return <span className="text-red-600 font-medium">⚠️ Out of Stock Items</span>;
+                          } else if (hasLowStock) {
+                            return <span className="text-amber-600 font-medium">⚠️ Low Stock Items</span>;
+                          }
+                          return null;
+                        })()}
+                        <span>Created: {new Date(order.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => handleViewOrderDetails(order)}
+                        className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 rounded hover:bg-blue-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                        aria-label={`View details for order ${order.order_number}`}
+                      >
+                        <Eye className="h-3 w-3" aria-hidden="true" />
+                        <span>View Details</span>
+                      </button>
+                      
+                      {/* Validate Ingredients Button */}
+                      <button 
+                        onClick={async () => {
+                          const validation = await validateOrderIngredients(order.id);
+                          if (validation) {
+                            const { overall_validation, ingredient_summary } = validation;
+                            let message = `Order ${order.order_number} Ingredient Validation:\n\n`;
+                            message += `Overall Status: ${overall_validation.all_items_available ? 'All Available' : 'Some Issues'}\n`;
+                            message += `Total Items: ${overall_validation.total_items}\n`;
+                            message += `Available Items: ${overall_validation.available_items}\n`;
+                            message += `Unavailable Items: ${overall_validation.unavailable_items}\n\n`;
+                            message += `Ingredient Summary:\n`;
+                            message += `- Unavailable: ${ingredient_summary.total_unavailable_ingredients}\n`;
+                            message += `- Low Stock: ${ingredient_summary.total_low_stock_ingredients}\n`;
+                            message += `- Sufficient: ${ingredient_summary.total_sufficient_ingredients}\n`;
+                            message += `- Total: ${ingredient_summary.total_ingredients}`;
+                            alert(message);
+                          } else {
+                            alert('Failed to validate order ingredients. Please try again.');
+                          }
+                        }}
+                        className="px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-700 border border-purple-300 rounded hover:bg-purple-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors duration-200"
+                        aria-label={`Validate ingredients for order ${order.order_number}`}
+                      >
+                        <Package className="h-3 w-3" aria-hidden="true" />
+                        <span>Validate</span>
+                      </button>
+                      
+                      {/* Only show payment button for unpaid orders that are not completed */}
+                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
+                        <button 
+                          onClick={() => handleOpenPaymentModalEnhanced(order)}
+                          className="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200"
+                          aria-label={`Process payment for order ${order.order_number}`}
+                        >
+                          <CreditCard className="h-3 w-3" aria-hidden="true" />
+                          <span>Payment</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tablet Layout (640px - 1023px) */}
+                <div className="hidden md:block lg:hidden">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-lg font-medium text-gray-900">
+                        <h3 className="text-base font-medium text-gray-900">
                           Order #{order.order_number}
                         </h3>
                         <p className="text-sm text-gray-600">
                           {order.customer_name || 'Walk-in Customer'}
-                          {order.customer_phone && ` • ${order.customer_phone}`}
                         </p>
-              </div>
+                      </div>
                       <div className="flex items-center space-x-2">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
                           {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
@@ -401,92 +514,114 @@ const CashierDashboard: React.FC = React.memo(() => {
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(order.payment_status)}`}>
                           {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
                         </span>
-              </div>
-            </div>
+                      </div>
+                    </div>
                     
-                    <div className="mt-2 flex items-center space-x-6 text-sm text-gray-500">
-                      <span>Type: {order.order_type.replace('_', ' ').toUpperCase()}</span>
-                      {order.table_number && <span>Table: {order.table_number}</span>}
-                      <span>Total: ₱{calculateOrderTotal(order).toFixed(2)}</span>
-                      {order.discount_applied && (
-                        <span className="text-green-600 font-medium">
-                          Discount: {order.discount_applied.code} (-₱{order.discount_amount?.toFixed(2) || '0.00'})
-                        </span>
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-500">
+                      <div>
+                        <span className="font-medium">Type:</span> {order.order_type.replace('_', ' ').toUpperCase()}
+                      </div>
+                      <div>
+                        <span className="font-medium">Total:</span> ₱{calculateOrderTotal(order).toFixed(2)}
+                      </div>
+                      {order.table_number && (
+                        <div>
+                          <span className="font-medium">Table:</span> {order.table_number}
+                        </div>
                       )}
-                      {/* Ingredient Status Indicator */}
-                      {(() => {
-                        const orderItems = (order as any).order_items || order.items || [];
-                        const hasLowStock = orderItems.some((item: any) => 
-                          item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'low_stock')
-                        );
-                        const hasOutOfStock = orderItems.some((item: any) => 
-                          item.menu_item?.ingredients?.some((ing: any) => ing.stock_status === 'out_of_stock')
-                        );
-                        
-                        if (hasOutOfStock) {
-                          return <span className="text-red-600 font-medium">⚠️ Out of Stock Items</span>;
-                        } else if (hasLowStock) {
-                          return <span className="text-amber-600 font-medium">⚠️ Low Stock Items</span>;
-                        }
-                        return null;
-                      })()}
-                      <span>Created: {new Date(order.created_at).toLocaleString()}</span>
-            </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => handleViewOrderDetails(order)}
-                      className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 rounded hover:bg-blue-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label={`View details for order ${order.order_number}`}
-                    >
-                      <Eye className="h-3 w-3" aria-hidden="true" />
-                      <span>View Details</span>
-                    </button>
+                      <div>
+                        <span className="font-medium">Created:</span> {new Date(order.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
                     
-                    {/* Validate Ingredients Button */}
-                    <button 
-                      onClick={async () => {
-                        const validation = await validateOrderIngredients(order.id);
-                        if (validation) {
-                          const { overall_validation, ingredient_summary } = validation;
-                          let message = `Order ${order.order_number} Ingredient Validation:\n\n`;
-                          message += `Overall Status: ${overall_validation.all_items_available ? 'All Available' : 'Some Issues'}\n`;
-                          message += `Total Items: ${overall_validation.total_items}\n`;
-                          message += `Available Items: ${overall_validation.available_items}\n`;
-                          message += `Unavailable Items: ${overall_validation.unavailable_items}\n\n`;
-                          message += `Ingredient Summary:\n`;
-                          message += `- Unavailable: ${ingredient_summary.total_unavailable_ingredients}\n`;
-                          message += `- Low Stock: ${ingredient_summary.total_low_stock_ingredients}\n`;
-                          message += `- Sufficient: ${ingredient_summary.total_sufficient_ingredients}\n`;
-                          message += `- Total: ${ingredient_summary.total_ingredients}`;
-                          alert(message);
-                        } else {
-                          alert('Failed to validate order ingredients. Please try again.');
-                        }
-                      }}
-                      className="px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-700 border border-purple-300 rounded hover:bg-purple-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      aria-label={`Validate ingredients for order ${order.order_number}`}
-                    >
-                      <Package className="h-3 w-3" aria-hidden="true" />
-                      <span>Validate</span>
-                    </button>
-                    
-                      {/* Only show payment button if order is not completed */}
-                      {order.status !== 'completed' && (
-                        <button 
-                        onClick={() => handleOpenPaymentModalEnhanced(order)}
-                        className={`px-3 py-1 text-xs font-medium border rounded flex items-center space-x-1 focus:outline-none focus:ring-2 transition-colors duration-200 ${
-                          order.payment_status === 'paid' 
-                            ? 'text-blue-600 hover:text-blue-700 border-blue-300 hover:bg-blue-50 focus:ring-blue-500' 
-                            : 'text-green-600 hover:text-green-700 border-green-300 hover:bg-green-50 focus:ring-green-500'
-                        }`}
-                        aria-label={`${order.payment_status === 'paid' ? 'Update payment for' : 'Process payment for'} order ${order.order_number}`}
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => handleViewOrderDetails(order)}
+                        className="px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-300 rounded hover:bg-blue-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 min-h-[44px]"
+                        aria-label={`View details for order ${order.order_number}`}
                       >
-                        <CreditCard className="h-3 w-3" aria-hidden="true" />
-                        <span>{order.payment_status === 'paid' ? 'Update Payment' : 'Payment'}</span>
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        <span>View Details</span>
+                      </button>
+                      
+                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
+                        <button 
+                          onClick={() => handleOpenPaymentModalEnhanced(order)}
+                          className="px-3 py-2 text-sm font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200 min-h-[44px]"
+                          aria-label={`Process payment for order ${order.order_number}`}
+                        >
+                          <CreditCard className="h-4 w-4" aria-hidden="true" />
+                          <span>Payment</span>
                         </button>
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile Layout (< 640px) */}
+                <div className="block md:hidden">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-medium text-gray-900">
+                          Order #{order.order_number}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {order.customer_name || 'Walk-in Customer'}
+                        </p>
+                      </div>
+                      <div className="flex flex-col space-y-1">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(order.payment_status)}`}>
+                          {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 text-sm text-gray-500">
+                      <div className="flex justify-between">
+                        <span>Type:</span>
+                        <span>{order.order_type.replace('_', ' ').toUpperCase()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total:</span>
+                        <span className="font-medium">₱{calculateOrderTotal(order).toFixed(2)}</span>
+                      </div>
+                      {order.table_number && (
+                        <div className="flex justify-between">
+                          <span>Table:</span>
+                          <span>{order.table_number}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Created:</span>
+                        <span>{new Date(order.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col space-y-2">
+                      <button 
+                        onClick={() => handleViewOrderDetails(order)}
+                        className="w-full px-4 py-3 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-300 rounded hover:bg-blue-50 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 min-h-[44px]"
+                        aria-label={`View details for order ${order.order_number}`}
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        <span>View Details</span>
+                      </button>
+                      
+                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
+                        <button 
+                          onClick={() => handleOpenPaymentModalEnhanced(order)}
+                          className="w-full px-4 py-3 text-sm font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200 min-h-[44px]"
+                          aria-label={`Process payment for order ${order.order_number}`}
+                        >
+                          <CreditCard className="h-4 w-4" aria-hidden="true" />
+                          <span>Process Payment</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

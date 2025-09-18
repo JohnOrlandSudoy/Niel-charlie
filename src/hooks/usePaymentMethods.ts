@@ -1,22 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
-// Payment Method Types (same as in Settings.tsx)
+// Payment Method Types (for available methods API)
 export interface PaymentMethod {
-  id: string;
   method_key: string;
   method_name: string;
   method_description: string;
-  is_enabled: boolean;
   is_online: boolean;
-  requires_setup: boolean;
   display_order: number;
   icon_name: string;
   color_code: string;
-  config_data: Record<string, any>;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface UsePaymentMethodsReturn {

@@ -9,6 +9,7 @@ const SignIn: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -26,7 +27,8 @@ const SignIn: React.FC = () => {
       // Trim whitespace from inputs
       const trimmedData = {
         username: data.username.trim(),
-        password: data.password.trim()
+        password: data.password.trim(),
+        rememberMe: rememberMe
       };
       
       console.log('SignIn: Form submitted with data:', trimmedData);
@@ -71,6 +73,9 @@ const SignIn: React.FC = () => {
             >
               create a new account
             </Link>
+          </p>
+          <p className="mt-1 text-center text-sm text-gray-600">
+       
           </p>
         </div>
 
@@ -154,13 +159,18 @@ const SignIn: React.FC = () => {
             </button>
           </div>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Forgot your password?{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200">
-                Reset it here
-              </a>
-            </p>
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+              Remember me
+            </label>
           </div>
 
         </form>

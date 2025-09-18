@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { config } from '../utils/config';
 
 // Supabase configuration
-const supabaseUrl = 'https://italcjeomaybmbabgmmq.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWxjamVvbWF5Ym1iYWJnbW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NTM1ODksImV4cCI6MjA3MjUyOTU4OX0.zhXcBoVHJPDU0ctXfij6cqviADJ5ZO7ByrupzCWoDYA';
+const supabaseUrl = config.supabase.url;
+const supabaseAnonKey = config.supabase.anonKey;
 
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
