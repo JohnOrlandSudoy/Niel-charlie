@@ -480,17 +480,6 @@ const CashierDashboard: React.FC = React.memo(() => {
                         <span>Validate</span>
                       </button>
                       
-                      {/* Only show payment button for unpaid orders that are not completed */}
-                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
-                        <button 
-                          onClick={() => handleOpenPaymentModalEnhanced(order)}
-                          className="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200"
-                          aria-label={`Process payment for order ${order.order_number}`}
-                        >
-                          <CreditCard className="h-3 w-3" aria-hidden="true" />
-                          <span>Payment</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -544,16 +533,6 @@ const CashierDashboard: React.FC = React.memo(() => {
                         <span>View Details</span>
                       </button>
                       
-                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
-                        <button 
-                          onClick={() => handleOpenPaymentModalEnhanced(order)}
-                          className="px-3 py-2 text-sm font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200 min-h-[44px]"
-                          aria-label={`Process payment for order ${order.order_number}`}
-                        >
-                          <CreditCard className="h-4 w-4" aria-hidden="true" />
-                          <span>Payment</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -611,16 +590,6 @@ const CashierDashboard: React.FC = React.memo(() => {
                         <span>View Details</span>
                       </button>
                       
-                      {order.status !== 'completed' && order.payment_status === 'unpaid' && (
-                        <button 
-                          onClick={() => handleOpenPaymentModalEnhanced(order)}
-                          className="w-full px-4 py-3 text-sm font-medium text-green-600 hover:text-green-700 border border-green-300 rounded hover:bg-green-50 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200 min-h-[44px]"
-                          aria-label={`Process payment for order ${order.order_number}`}
-                        >
-                          <CreditCard className="h-4 w-4" aria-hidden="true" />
-                          <span>Process Payment</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import ProfileModal from './ProfileModal';
 
 interface HeaderProps {
   isLaptopScreen?: boolean;
@@ -8,6 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ isLaptopScreen = false }) => {
   const [showProfile, setShowProfile] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
@@ -67,7 +69,13 @@ const Header: React.FC<HeaderProps> = ({ isLaptopScreen = false }) => {
                     <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
                   </div>
                   <div className="p-2">
-                    <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+                    <button 
+                      onClick={() => {
+                        setShowProfile(false);
+                        setShowProfileModal(true);
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                    >
                       <User className="h-4 w-4" />
                       <span>Profile</span>
                     </button>
@@ -85,6 +93,12 @@ const Header: React.FC<HeaderProps> = ({ isLaptopScreen = false }) => {
           )}
         </div>
       </div>
+
+      {/* Profile Modal */}
+      <ProfileModal 
+        isOpen={showProfileModal} 
+        onClose={() => setShowProfileModal(false)} 
+      />
     </header>
   );
 };

@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import SignIn from './components/Auth/SignIn';
-import SignUp from './components/Auth/SignUp';
 import ResendVerification from './components/Auth/ResendVerification';
 import AdminLayout from './components/Layout/AdminLayout';
 import CashierLayout from './components/Layout/CashierLayout';
@@ -32,7 +31,6 @@ const AppRoutes: React.FC = () => {
     return (
       <Routes>
         <Route path="/signin" element={<SignIn />} />
-        <Route path="/signup" element={<SignUp />} />
         <Route path="/resend-verification" element={<ResendVerification />} />
         <Route path="*" element={<Navigate to="/signin" replace />} />
       </Routes>

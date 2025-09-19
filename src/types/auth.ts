@@ -5,8 +5,12 @@ export interface User {
   role: UserRole;
   firstName: string;
   lastName: string;
-  createdAt: string;
+  phone?: string;
+  avatarUrl?: string;
+  isActive: boolean;
   lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type UserRole = 'admin' | 'cashier' | 'kitchen';
@@ -17,7 +21,7 @@ export interface LoginCredentials {
   rememberMe?: boolean;
 }
 
-export interface SignUpData {
+export interface AdminCreateUserData {
   username: string;
   email: string;
   password: string;
@@ -25,6 +29,17 @@ export interface SignUpData {
   firstName: string;
   lastName: string;
   role: UserRole;
+  phone?: string;
+}
+
+export interface AdminUpdateUserData {
+  username?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: UserRole;
+  phone?: string;
+  isActive?: boolean;
 }
 
 
@@ -36,7 +51,10 @@ export interface ChangePasswordData {
 export interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; message: string }>;
-  signup: (data: SignUpData) => Promise<{ success: boolean; message: string }>;
+  createUser: (data: AdminCreateUserData) => Promise<{ success: boolean; message: string; data?: any }>;
+  getAllUsers: () => Promise<{ success: boolean; data?: User[]; message?: string }>;
+  updateUser: (userId: string, data: AdminUpdateUserData) => Promise<{ success: boolean; message: string; data?: User }>;
+  deleteUser: (userId: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   changePassword: (data: ChangePasswordData) => Promise<{ success: boolean; message: string }>;
   resendVerification: (email: string) => Promise<{ success: boolean; message: string }>;

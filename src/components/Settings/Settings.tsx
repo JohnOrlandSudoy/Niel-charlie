@@ -229,6 +229,10 @@ const Settings: React.FC = () => {
                   </div>
                 ) : (
                   paymentMethods
+                    .filter((method) => 
+                      method.method_key === 'paymongo' || 
+                      method.method_key === 'cash'
+                    )
                     .sort((a, b) => a.display_order - b.display_order)
                     .map((method) => (
                       <div
@@ -241,12 +245,9 @@ const Settings: React.FC = () => {
                               className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-medium text-lg"
                               style={{ backgroundColor: method.color_code }}
                             >
-                              {method.icon_name === 'cash' && '₱'}
-                              {method.icon_name === 'gcash' && 'G'}
-                              {method.icon_name === 'card' && '💳'}
-                              {method.icon_name === 'paymongo' && 'P'}
-                              {method.icon_name === 'qrph' && 'QR'}
-                              {!['cash', 'gcash', 'card', 'paymongo', 'qrph'].includes(method.icon_name) && '💳'}
+                              {method.method_key === 'cash' && '₱'}
+                              {method.method_key === 'paymongo' && 'P'}
+                              {!['cash', 'paymongo'].includes(method.method_key) && '💳'}
                             </div>
                             <div>
                               <h4 className="font-medium text-gray-900 text-lg">{method.method_name}</h4>
@@ -306,8 +307,8 @@ const Settings: React.FC = () => {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-medium text-blue-900 mb-2">Payment Method Information</h4>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• <strong>Online methods</strong> require internet connection and may have additional setup requirements</li>
-                <li>• <strong>Offline methods</strong> work without internet but require manual processing</li>
+                <li>• <strong>PayMongo (Online)</strong> - Requires internet connection and additional setup for online payments</li>
+                <li>• <strong>Cash (Offline)</strong> - Works without internet for cash payments and manual processing</li>
                 <li>• <strong>Setup Required</strong> indicates the method needs additional configuration</li>
                 <li>• Only enabled payment methods will be available to customers during checkout</li>
               </ul>

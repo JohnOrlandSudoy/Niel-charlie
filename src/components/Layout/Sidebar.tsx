@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, Book as MenuBook, ClipboardList, Settings, Shield, LogOut, Tags, Percent, CreditCard, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Package, Book as MenuBook, ClipboardList, Settings, Shield, LogOut, Tags, Percent, CreditCard, Menu, X, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
@@ -23,6 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'users', label: 'User Management', icon: Users },
     { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'menu', label: 'Menu Management', icon: MenuBook },
     { id: 'categories', label: 'Categories', icon: Tags },
@@ -37,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handlePageChange = (page: string) => {
+    console.log('Sidebar: Page change requested:', page);
     onPageChange(page);
     if (isMobile && onClose) {
       onClose();

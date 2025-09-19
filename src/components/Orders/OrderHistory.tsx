@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Order as ApiOrder, PaginatedOrderResponse } from '../../types/orders';
+import * as XLSX from 'xlsx';
 
 const OrderHistory: React.FC = () => {
   const [orders, setOrders] = useState<ApiOrder[]>([]);
@@ -29,6 +30,10 @@ const OrderHistory: React.FC = () => {
   const [forceDelete, setForceDelete] = useState(false);
   const [showForceDeleteWarning, setShowForceDeleteWarning] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  
+  // Export functionality states
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Fetch orders from API
   const fetchOrders = async (page: number = currentPage, resetPage: boolean = false) => {
@@ -328,6 +333,169 @@ const OrderHistory: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  // Export orders to Excel
+  const handleExportToExcel = async () => {
+    try {
+      setIsExporting(true);
+      setExportError(null);
+      
+      console.log('📊 Starting Excel export...');
+      
+      // Fetch all orders for export (not just current page)
+      let allOrders: ApiOrder[] = [];
+      
+      try {
+        // Get all orders without pagination
+        const response = await api.orders.getAll({
+          page: 1,
+          limit: 10000, // Large limit to get all orders
+          ...(filterStatus !== 'all' && { status: filterStatus }),
+          ...(filterType !== 'all' && { order_type: filterType })
+        });
+        
+        const result: PaginatedOrderResponse = await response.json();
+        
+        if (result.success && result.data) {
+          allOrders = await enhanceOrdersWithItems(result.data);
+          console.log(`📊 Fetched ${allOrders.length} orders for export`);
+        } else {
+          throw new Error(result.message || 'Failed to fetch orders for export');
+        }
+      } catch (fetchError) {
+        console.warn('⚠️ Could not fetch all orders, using current page data');
+        allOrders = orders; // Fallback to current page data
+      }
+
+      // Prepare data for Excel export
+      const exportData = allOrders.map((order) => {
+        // Get order items
+        const orderItems = order.order_items || order.items || [];
+        
+        // Calculate item details
+        const itemDetails = orderItems.map((item: any) => {
+          const itemName = (item as any).menu_items?.name || item.menu_item?.name || 'Unknown Item';
+          const quantity = item.quantity || 0;
+          const unitPrice = item.unit_price || 0;
+          const totalPrice = quantity * unitPrice;
+          
+          return {
+            itemName,
+            quantity,
+            unitPrice,
+            totalPrice,
+            customizations: item.customizations ? JSON.stringify(item.customizations) : '',
+            specialInstructions: item.special_instructions || ''
+          };
+        });
+
+        // Format dates
+        const formatDate = (dateString: string) => {
+          return new Date(dateString).toLocaleString('en-PH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+        };
+
+        // Main order data
+        const orderData = {
+          'Order Number': order.order_number,
+          'Order ID': order.id,
+          'Customer Name': order.customer_name || 'Walk-in Customer',
+          'Customer Phone': order.customer_phone || '',
+          'Order Type': order.order_type.replace('_', ' ').toUpperCase(),
+          'Table Number': order.table_number || '',
+          'Status': order.status.toUpperCase(),
+          'Payment Status': order.payment_status.toUpperCase(),
+          'Payment Method': order.payment_method || '',
+          'Subtotal': order.subtotal || 0,
+          'Tax Amount': order.tax_amount || 0,
+          'Discount Amount': order.discount_amount || 0,
+          'Total Amount': order.total_amount,
+          'Special Instructions': order.special_instructions || '',
+          'Created Date': formatDate(order.created_at),
+          'Updated Date': formatDate(order.updated_at),
+          'Items Count': orderItems.length,
+          'Items Details': itemDetails.map(item => 
+            `${item.itemName} (Qty: ${item.quantity}, Price: ₱${item.unitPrice.toFixed(2)}, Total: ₱${item.totalPrice.toFixed(2)})`
+          ).join('; ')
+        };
+
+        return orderData;
+      });
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      
+      // Main orders sheet
+      const ordersSheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // Set column widths
+      const columnWidths = [
+        { wch: 15 }, // Order Number
+        { wch: 25 }, // Order ID
+        { wch: 20 }, // Customer Name
+        { wch: 15 }, // Customer Phone
+        { wch: 12 }, // Order Type
+        { wch: 12 }, // Table Number
+        { wch: 12 }, // Status
+        { wch: 15 }, // Payment Status
+        { wch: 15 }, // Payment Method
+        { wch: 12 }, // Subtotal
+        { wch: 12 }, // Tax Amount
+        { wch: 15 }, // Discount Amount
+        { wch: 15 }, // Total Amount
+        { wch: 30 }, // Special Instructions
+        { wch: 20 }, // Created Date
+        { wch: 20 }, // Updated Date
+        { wch: 12 }, // Items Count
+        { wch: 50 }  // Items Details
+      ];
+      ordersSheet['!cols'] = columnWidths;
+      
+      XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Orders');
+
+      // Create summary sheet
+      const summaryData = [
+        { 'Metric': 'Total Orders', 'Value': allOrders.length },
+        { 'Metric': 'Total Revenue', 'Value': `₱${allOrders.reduce((sum, order) => sum + order.total_amount, 0).toFixed(2)}` },
+        { 'Metric': 'Completed Orders', 'Value': allOrders.filter(o => o.status === 'completed').length },
+        { 'Metric': 'Pending Orders', 'Value': allOrders.filter(o => o.status === 'pending').length },
+        { 'Metric': 'Preparing Orders', 'Value': allOrders.filter(o => o.status === 'preparing').length },
+        { 'Metric': 'Cancelled Orders', 'Value': allOrders.filter(o => o.status === 'cancelled').length },
+        { 'Metric': 'Paid Orders', 'Value': allOrders.filter(o => o.payment_status === 'paid').length },
+        { 'Metric': 'Unpaid Orders', 'Value': allOrders.filter(o => o.payment_status === 'unpaid').length },
+        { 'Metric': 'Dine-in Orders', 'Value': allOrders.filter(o => o.order_type === 'dine_in').length },
+        { 'Metric': 'Takeout Orders', 'Value': allOrders.filter(o => o.order_type === 'takeout').length },
+        { 'Metric': 'Export Date', 'Value': new Date().toLocaleString('en-PH') },
+        { 'Metric': 'Export Generated By', 'Value': 'Restaurant Management System' }
+      ];
+
+      const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+      summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `Order_History_Report_${timestamp}.xlsx`;
+
+      // Save the file
+      XLSX.writeFile(workbook, filename);
+      
+      console.log(`✅ Excel export completed: ${filename}`);
+      console.log(`📊 Exported ${allOrders.length} orders`);
+      
+    } catch (error) {
+      console.error('❌ Excel export failed:', error);
+      setExportError(error instanceof Error ? error.message : 'Failed to export orders to Excel');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Handle print order
@@ -743,10 +911,22 @@ const OrderHistory: React.FC = () => {
             <span className="hidden sm:inline">Refresh Items</span>
             <span className="sm:hidden">Refresh</span>
           </button>
-          <button className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export Report</span>
-            <span className="sm:hidden">Export</span>
+          <button 
+            onClick={handleExportToExcel}
+            disabled={isExporting}
+            className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 sm:space-x-2 transition-colors duration-200 text-sm sm:text-base"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {isExporting ? 'Exporting...' : 'Export Report'}
+            </span>
+            <span className="sm:hidden">
+              {isExporting ? 'Exporting...' : 'Export'}
+            </span>
           </button>
         </div>
       </div>
@@ -757,6 +937,22 @@ const OrderHistory: React.FC = () => {
           <div className="flex items-center space-x-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />
             <span className="text-red-800">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Export Error Display */}
+      {exportError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <span className="text-red-800">Export Error: {exportError}</span>
+            <button
+              onClick={() => setExportError(null)}
+              className="ml-auto text-red-600 hover:text-red-800"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}

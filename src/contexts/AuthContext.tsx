@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, SignUpData, AuthContextType, ChangePasswordData } from '../types/auth';
+import { User, LoginCredentials, AdminCreateUserData, AdminUpdateUserData, AuthContextType, ChangePasswordData } from '../types/auth';
 import { api } from '../utils/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,43 +66,164 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signup = async (data: SignUpData): Promise<{ success: boolean; message: string }> => {
+  const createUser = async (data: AdminCreateUserData): Promise<{ success: boolean; message: string; data?: any }> => {
     try {
       setIsLoading(true);
-      console.log('AuthContext: Starting signup for:', data.username);
+      console.log('AuthContext: Starting user creation for:', data.username, 'with role:', data.role);
       
-      // Map the data to match API expectations
+      // Map the data to match your server's expected format
       const apiData = {
         username: data.username,
         email: data.email,
         password: data.password,
-        role: data.role,
-        first_name: data.firstName,
-        last_name: data.lastName,
-        phone: data.phone || null
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone || null,
+        role: data.role
       };
       
-      console.log('AuthContext: Sending API data:', apiData);
+      // Validate required fields
+      const validationErrors = [];
+      if (!apiData.username || apiData.username.trim().length === 0) {
+        validationErrors.push('Username is required');
+      }
+      if (!apiData.email || apiData.email.trim().length === 0) {
+        validationErrors.push('Email is required');
+      }
+      if (!apiData.password || apiData.password.trim().length === 0) {
+        validationErrors.push('Password is required');
+      }
+      if (!apiData.firstName || apiData.firstName.trim().length === 0) {
+        validationErrors.push('First name is required');
+      }
+      if (!apiData.lastName || apiData.lastName.trim().length === 0) {
+        validationErrors.push('Last name is required');
+      }
+      if (!apiData.role) {
+        validationErrors.push('Role is required');
+      }
       
-      // Call your API server for registration
-      const response = await api.auth.register(apiData);
+      if (validationErrors.length > 0) {
+        console.log('❌ Validation errors:', validationErrors);
+        return { success: false, message: validationErrors.join(', ') };
+      }
+      
+      console.log('AuthContext: Sending API data:', apiData);
+      console.log('AuthContext: Full input data:', data);
+      
+      // Call the appropriate role-specific endpoint
+      let response;
+      switch (data.role) {
+        case 'admin':
+          response = await api.auth.createAdmin(apiData);
+          break;
+        case 'cashier':
+          response = await api.auth.createCashier(apiData);
+          break;
+        case 'kitchen':
+          response = await api.auth.createKitchen(apiData);
+          break;
+        default:
+          throw new Error(`Invalid role: ${data.role}`);
+      }
+      
       const result = await response.json();
-      console.log('AuthContext: Signup API response:', result);
+      console.log('AuthContext: Create user API response:', result);
+      console.log('AuthContext: Response status:', response.status);
+      console.log('AuthContext: Response statusText:', response.statusText);
 
-      if (result.success && result.data) {
-        // Store token and user data
-        localStorage.setItem('authToken', result.data.token);
-        localStorage.setItem('userData', JSON.stringify(result.data.user));
-        
-        setUser(result.data.user);
-        console.log('AuthContext: User created successfully:', result.data.user);
-        return { success: true, message: result.message || 'Account created successfully' };
+      if (result.success) {
+        console.log('AuthContext: User created successfully:', result.data);
+        return { success: true, message: result.message || 'User created successfully', data: result.data };
       } else {
-        console.log('AuthContext: Signup failed:', result.message || result.error);
-        return { success: false, message: result.message || result.error || 'Signup failed' };
+        console.log('AuthContext: User creation failed:', result.message || result.error);
+        console.log('AuthContext: Full error response:', result);
+        return { success: false, message: result.message || result.error || 'User creation failed' };
       }
     } catch (error) {
-      console.error('AuthContext: Signup error:', error);
+      console.error('AuthContext: User creation error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getAllUsers = async (): Promise<{ success: boolean; data?: User[]; message?: string }> => {
+    try {
+      console.log('AuthContext: Fetching all users');
+      
+      const response = await api.auth.getAllUsers();
+      const result = await response.json();
+      console.log('AuthContext: Get all users API response:', result);
+
+      if (result.success) {
+        console.log('AuthContext: Users fetched successfully:', result.data);
+        return { success: true, data: result.data, message: result.message };
+      } else {
+        console.log('AuthContext: Failed to fetch users:', result.message);
+        return { success: false, message: result.message || 'Failed to fetch users' };
+      }
+    } catch (error) {
+      console.error('AuthContext: Get all users error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
+    }
+  };
+
+  const updateUser = async (userId: string, data: AdminUpdateUserData): Promise<{ success: boolean; message: string; data?: User }> => {
+    try {
+      setIsLoading(true);
+      console.log('AuthContext: Updating user:', userId);
+      
+      // Map the data to match your server's expected format
+      const apiData = {
+        username: data.username,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+        phone: data.phone,
+        isActive: data.isActive
+      };
+      
+      console.log('AuthContext: Sending update data:', apiData);
+      
+      const response = await api.auth.updateUser(userId, apiData);
+      const result = await response.json();
+      console.log('AuthContext: Update user API response:', result);
+
+      if (result.success) {
+        console.log('AuthContext: User updated successfully:', result.data);
+        return { success: true, message: result.message || 'User updated successfully', data: result.data };
+      } else {
+        console.log('AuthContext: User update failed:', result.message);
+        return { success: false, message: result.message || 'User update failed' };
+      }
+    } catch (error) {
+      console.error('AuthContext: User update error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteUser = async (userId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsLoading(true);
+      console.log('AuthContext: Deleting user:', userId);
+      
+      const response = await api.auth.deleteUser(userId);
+      const result = await response.json();
+      console.log('AuthContext: Delete user API response:', result);
+
+      if (result.success) {
+        console.log('AuthContext: User deleted successfully');
+        return { success: true, message: result.message || 'User deleted successfully' };
+      } else {
+        console.log('AuthContext: User deletion failed:', result.message);
+        return { success: false, message: result.message || 'User deletion failed' };
+      }
+    } catch (error) {
+      console.error('AuthContext: User deletion error:', error);
       return { success: false, message: 'An unexpected error occurred' };
     } finally {
       setIsLoading(false);
@@ -114,6 +235,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear local storage
       localStorage.removeItem('authToken');
       localStorage.removeItem('userData');
+      localStorage.removeItem('adminCurrentPage'); // Clear saved admin page
       setUser(null);
       
       // Optionally call logout API if you have one
@@ -171,7 +293,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     user,
     login,
-    signup,
+    createUser,
+    getAllUsers,
+    updateUser,
+    deleteUser,
     logout,
     changePassword,
     resendVerification,

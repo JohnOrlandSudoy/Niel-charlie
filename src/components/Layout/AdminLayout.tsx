@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../Dashboard/Dashboard';
+import UserManagement from '../Admin/UserManagement';
 import InventoryManagement from '../Inventory/InventoryManagement';
 import MenuManagement from '../Menu/MenuManagement';
 import CategoryManagement from '../Menu/CategoryManagement';
@@ -12,7 +13,13 @@ import PayMongoPaymentManagement from '../PayMongo/PayMongoPaymentManagement';
 import Settings from '../Settings/Settings';
 
 const AdminLayout: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  // Initialize currentPage from localStorage or default to 'dashboard'
+  const [currentPage, setCurrentPage] = useState(() => {
+    const savedPage = localStorage.getItem('adminCurrentPage');
+    // Validate that the saved page is a valid route
+    const validPages = ['dashboard', 'users', 'inventory', 'menu', 'categories', 'discounts', 'orders', 'paymongo', 'settings'];
+    return validPages.includes(savedPage || '') ? savedPage : 'dashboard';
+  });
   
   // Responsive state management
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -40,6 +47,15 @@ const AdminLayout: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Save currentPage to localStorage whenever it changes
+  useEffect(() => {
+    console.log('AdminLayout: currentPage state changed to:', currentPage);
+    if (currentPage) {
+      localStorage.setItem('adminCurrentPage', currentPage);
+    }
+  }, [currentPage]);
+
+
   const toggleSidebar = () => {
     if (isMobile) {
       setIsMobileSidebarOpen(!isMobileSidebarOpen);
@@ -52,10 +68,17 @@ const AdminLayout: React.FC = () => {
     setIsMobileSidebarOpen(false);
   };
 
+
   const renderCurrentPage = () => {
+    console.log('AdminLayout: Rendering page:', currentPage);
+    
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard onNavigateToInventory={() => setCurrentPage('inventory')} />;
+      case 'users':
+        console.log('AdminLayout: Rendering UserManagement component');
+        console.log('AdminLayout: About to render UserManagement component');
+        return <UserManagement />;
       case 'inventory':
         return <InventoryManagement />;
       case 'menu':
@@ -71,6 +94,7 @@ const AdminLayout: React.FC = () => {
       case 'settings':
         return <Settings />;
       default:
+        console.log('AdminLayout: Default case, rendering Dashboard');
         return <Dashboard />;
     }
   };
@@ -80,8 +104,11 @@ const AdminLayout: React.FC = () => {
       <div className="flex">
         {/* Sidebar */}
         <Sidebar 
-          currentPage={currentPage} 
-          onPageChange={setCurrentPage}
+          currentPage={currentPage || 'dashboard'} 
+          onPageChange={(page) => {
+            console.log('AdminLayout: Page change from', currentPage, 'to', page);
+            setCurrentPage(page);
+          }}
           isCollapsed={isSidebarCollapsed}
           isMobile={isMobile && isMobileSidebarOpen}
           onToggle={toggleSidebar}

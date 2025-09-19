@@ -2,11 +2,20 @@
 import { offlineApiManager } from './offlineApiManager';
 import { config } from './config';
 
-const API_BASE_URL = config.api.baseUrl;
+// Force the correct API URL to override any cached configuration
+const API_BASE_URL = 'http://localhost:3000/api';
+console.log('API_BASE_URL configured as:', API_BASE_URL);
+console.log('Config object:', config);
+console.log('Config API baseUrl:', config.api.baseUrl);
+console.log('Using hardcoded API_BASE_URL to override config');
 
 // Get auth token from localStorage
 export const getAuthToken = (): string | null => {
-  return localStorage.getItem('authToken');
+  const token = localStorage.getItem('authToken');
+  console.log('getAuthToken called:');
+  console.log('- Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
+  console.log('- All localStorage keys:', Object.keys(localStorage));
+  return token;
 };
 
 // Get user data from localStorage
@@ -31,12 +40,20 @@ export const directApiRequest = async (
 ): Promise<Response> => {
   const token = getAuthToken();
   
+  console.log('API Request Debug:');
+  console.log('- Endpoint:', endpoint);
+  console.log('- Token exists:', !!token);
+  console.log('- Token value:', token ? `${token.substring(0, 20)}...` : 'null');
+  
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
   };
 
   if (token) {
     defaultHeaders.Authorization = `Bearer ${token}`;
+    console.log('- Authorization header set');
+  } else {
+    console.log('- No token found, request will be unauthorized');
   }
 
   const config: RequestInit = {
@@ -47,13 +64,59 @@ export const directApiRequest = async (
     },
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  console.log('Making API request to:', fullUrl);
+  console.log('Request timestamp:', new Date().toISOString());
+  console.log('Request headers:', config.headers);
+  console.log('Authorization header:', (config.headers as any)?.Authorization);
+  console.log('Authorization header type:', typeof (config.headers as any)?.Authorization);
+  console.log('Authorization header length:', (config.headers as any)?.Authorization?.length);
+  const response = await fetch(fullUrl, config);
+  
+  // Log response details for debugging
+  console.log('Response status:', response.status);
+  console.log('Response statusText:', response.statusText);
   
   // If unauthorized, clear auth data and redirect to login
+  // But skip redirect for endpoints that might not be implemented yet
   if (response.status === 401) {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    window.location.href = '/signin';
+    const skipRedirectEndpoints = [
+      '/auth/users',
+      '/auth/create-admin',
+      '/auth/create-cashier',
+      '/auth/create-kitchen',
+      '/auth/users/'
+    ];
+    
+    const shouldSkipRedirect = skipRedirectEndpoints.some(skipEndpoint => 
+      endpoint.includes(skipEndpoint)
+    );
+    
+    if (!shouldSkipRedirect) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      window.location.href = '/signin';
+    }
+  }
+  
+  // Also handle other error statuses for user management endpoints
+  // to prevent unexpected redirects when server is not available
+  if (response.status >= 400 && response.status < 600) {
+    const skipRedirectEndpoints = [
+      '/auth/users',
+      '/auth/create-admin',
+      '/auth/create-cashier',
+      '/auth/create-kitchen',
+      '/auth/users/'
+    ];
+    
+    const shouldSkipRedirect = skipRedirectEndpoints.some(skipEndpoint => 
+      endpoint.includes(skipEndpoint)
+    );
+    
+    if (shouldSkipRedirect) {
+      console.log(`API endpoint ${endpoint} returned ${response.status}, but skipping redirect for user management`);
+    }
   }
 
   return response;
@@ -64,31 +127,58 @@ export const api = {
   // Auth endpoints
   auth: {
     login: (credentials: { username: string; password: string }) =>
-      apiRequest('/auth/login', {
+      directApiRequest('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       }),
     
-    register: (userData: any) =>
-      apiRequest('/auth/register', {
+    // Admin user management endpoints - role-specific creation
+    createAdmin: (userData: any) =>
+      directApiRequest('/auth/create-admin', {
         method: 'POST',
         body: JSON.stringify(userData),
       }),
     
+    createCashier: (userData: any) =>
+      directApiRequest('/auth/create-cashier', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      }),
+    
+    createKitchen: (userData: any) =>
+      directApiRequest('/auth/create-kitchen', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      }),
+    
+    getAllUsers: () =>
+      directApiRequest('/auth/users'),
+    
+    updateUser: (userId: string, userData: any) =>
+      directApiRequest(`/auth/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify(userData),
+      }),
+    
+    deleteUser: (userId: string) =>
+      directApiRequest(`/auth/users/${userId}`, {
+        method: 'DELETE',
+      }),
+    
     logout: () =>
-      apiRequest('/auth/logout', {
+      directApiRequest('/auth/logout', {
         method: 'POST',
       }),
 
 
     changePassword: (currentPassword: string, newPassword: string) =>
-      apiRequest('/auth/change-password', {
+      directApiRequest('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       }),
 
     resendVerification: (email: string) =>
-      apiRequest('/auth/resend-verification', {
+      directApiRequest('/auth/resend-verification', {
         method: 'POST',
         body: JSON.stringify({ email }),
       }),
@@ -96,9 +186,9 @@ export const api = {
 
   // User endpoints
   users: {
-    getProfile: () => apiRequest('/users/profile'),
+    getProfile: () => directApiRequest('/users/profile'),
     updateProfile: (data: any) =>
-      apiRequest('/users/profile', {
+      directApiRequest('/users/profile', {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
