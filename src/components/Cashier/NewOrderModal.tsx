@@ -476,7 +476,15 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
             total_amount: result.data.total_amount
           };
           
-          console.log('Updating current order with discounted totals:', updatedOrder);
+          console.log('🔍 DISCOUNT APPLICATION DEBUG:');
+          console.log('- Original order:', currentOrder);
+          console.log('- API response data:', result.data);
+          console.log('- Updated order with discount:', updatedOrder);
+          console.log('- Discount fields in updated order:', {
+            discount_applied: updatedOrder.discount_applied,
+            discount_amount: updatedOrder.discount_amount
+          });
+          
           setCurrentOrder(updatedOrder);
         }
         
@@ -915,15 +923,23 @@ const NewOrderModal: React.FC<NewOrderModalProps> = React.memo(({ onClose, onOrd
 
       {/* Enhanced Payment Modal - For Cash Payments */}
       {showEnhancedPaymentModal && currentOrder && (
-        <EnhancedPaymentModal
-          order={currentOrder}
-          isOpen={showEnhancedPaymentModal}
-          onClose={() => setShowEnhancedPaymentModal(false)}
-          onPaymentComplete={handlePaymentComplete}
-          onReceiptGenerated={handleReceiptGenerated}
-          onApplyDiscount={handleApplyDiscount}
-          cashOnly={paymentForm.payment_method === 'cash'}
-        />
+        <>
+          {console.log('🔍 PASSING ORDER TO ENHANCED PAYMENT MODAL:', {
+            order: currentOrder,
+            discount_applied: (currentOrder as any).discount_applied,
+            discount_amount: (currentOrder as any).discount_amount,
+            orderKeys: Object.keys(currentOrder)
+          })}
+          <EnhancedPaymentModal
+            order={currentOrder}
+            isOpen={showEnhancedPaymentModal}
+            onClose={() => setShowEnhancedPaymentModal(false)}
+            onPaymentComplete={handlePaymentComplete}
+            onReceiptGenerated={handleReceiptGenerated}
+            onApplyDiscount={handleApplyDiscount}
+            cashOnly={paymentForm.payment_method === 'cash'}
+          />
+        </>
       )}
 
       {/* Payment Method Selection Modal */}

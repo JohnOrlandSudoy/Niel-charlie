@@ -242,45 +242,67 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                   <div><span className="font-medium">Subtotal:</span> ₱{displayTotals.subtotal.toFixed(2)}</div>
                   <div><span className="font-medium">Tax (12%):</span> ₱{displayTotals.tax.toFixed(2)}</div>
                   
-                  {/* Show discount information if applied */}
-                  {(order as any).discount_applied && (order as any).discount_amount && (
-                    <>
-                      <div className="text-green-600">
-                        <span className="font-medium">Discount ({(order as any).discount_applied?.code || (order as any).discount_applied}):</span> 
-                        <span className="ml-2">-₱{((order as any).discount_amount || 0).toFixed(2)}</span>
-                      </div>
-                      {/* Show discount calculation details */}
-                      {(() => {
-                        const originalTotal = displayTotals.subtotal + displayTotals.tax;
-                        const discountAmount = (order as any).discount_amount || 0;
-                        const discountPercentage = originalTotal > 0 ? ((discountAmount / originalTotal) * 100) : 0;
-                        
-                        return (
-                          <div className="text-xs text-green-600 ml-4 mt-1">
-                            <div>Original Total: ₱{originalTotal.toFixed(2)}</div>
-                            <div>Discount: {discountPercentage.toFixed(1)}% off</div>
-                            <div>You Save: ₱{discountAmount.toFixed(2)}</div>
+                  {/* Enhanced discount display matching receipt approach */}
+                  {(() => {
+                    // Extract discount information with comprehensive fallback handling
+                    const discountApplied = (order as any).discount_applied;
+                    const discountCode = discountApplied?.code || discountApplied || (order as any).discount_code || null;
+                    const discountAmount = (order as any).discount_amount || (order as any).discountAmount || 0;
+                    
+                    console.log('🔍 ORDER DETAILS DISCOUNT DEBUG:', {
+                      discountApplied,
+                      discountCode,
+                      discountAmount,
+                      orderKeys: Object.keys(order),
+                      displayTotals
+                    });
+                    
+                    if (discountCode && discountAmount > 0) {
+                      const originalTotal = displayTotals.subtotal + displayTotals.tax;
+                      
+                      return (
+                        <>
+                          <div className="text-red-600 font-medium">
+                            <span>discount:</span> 
+                            <span className="ml-2">-{discountAmount.toFixed(2)}</span>
                           </div>
-                        );
-                      })()}
-                    </>
-                  )}
+                          <div className="text-xs text-red-600 ml-4 mt-1 space-y-1">
+                            <div>Original Total: ₱{originalTotal.toFixed(2)}</div>
+                            <div>Discount Applied: {((discountAmount / originalTotal) * 100).toFixed(1)}% off</div>
+                            <div className="font-bold">💰 You Save: ₱{discountAmount.toFixed(2)}</div>
+                          </div>
+                        </>
+                      );
+                    }
+                    return null;
+                  })()}
                   
                   <div className="border-t border-gray-200 pt-1 mt-2">
                     <div className="font-medium text-lg">
                       <span>Total:</span> 
-                      <span className="ml-2">₱{displayTotals.total.toFixed(2)}</span>
+                      <span className={`ml-2 ${displayTotals.total < (displayTotals.subtotal + displayTotals.tax) ? 'text-red-600 font-bold' : ''}`}>
+                        ₱{displayTotals.total.toFixed(2)}
+                      </span>
                     </div>
                   </div>
                   
                   {/* Show savings summary if discount is applied */}
-                  {(order as any).discount_applied && (order as any).discount_amount && (
-                    <div className="bg-green-50 border border-green-200 rounded p-2 mt-2">
-                      <div className="text-xs text-green-700 text-center">
-                        💰 You saved ₱{((order as any).discount_amount || 0).toFixed(2)} with {(order as any).discount_applied?.code || (order as any).discount_applied}!
-                      </div>
-                    </div>
-                  )}
+                  {(() => {
+                    const discountApplied = (order as any).discount_applied;
+                    const discountCode = discountApplied?.code || discountApplied || (order as any).discount_code || null;
+                    const discountAmount = (order as any).discount_amount || (order as any).discountAmount || 0;
+                    
+                    if (discountCode && discountAmount > 0) {
+                      return (
+                        <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded-lg">
+                          <div className="text-center text-red-700 font-semibold text-sm">
+                            🎉 Great Deal! You saved ₱{discountAmount.toFixed(2)} with {discountCode}!
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
             </div>

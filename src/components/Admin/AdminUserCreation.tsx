@@ -131,15 +131,15 @@ const AdminUserCreation: React.FC<AdminUserCreationProps> = ({ onUserCreated, on
             <button
               onClick={async () => {
                 console.log('=== TEST API DIRECTLY ===');
-                const testData = {
-                  username: 'testuser',
-                  email: 'test@example.com',
-                  password: 'testpass123',
-                  firstName: 'Test',
-                  lastName: 'User',
-                  phone: '1234567890',
-                  role: 'admin'
-                };
+                 const testData = {
+                   username: 'testuser',
+                   email: 'test@example.com',
+                   password: 'testpass123',
+                   firstName: 'Test',
+                   lastName: 'User',
+                   phone: '1234567890',
+                   role: 'admin'
+                 };
                 console.log('Testing with data:', testData);
                 try {
                   const response = await fetch('http://localhost:3000/api/auth/create-admin', {

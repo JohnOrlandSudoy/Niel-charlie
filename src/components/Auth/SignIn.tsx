@@ -1,28 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginCredentials } from '../../types/auth';
 
 const SignIn: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState<Date | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors }
   } = useForm<LoginCredentials>();
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedCredentials = localStorage.getItem('rememberedCredentials');
+    if (savedCredentials) {
+      try {
+        const { username, password, rememberMe: savedRememberMe } = JSON.parse(savedCredentials);
+        if (savedRememberMe) {
+          setValue('username', username);
+          setValue('password', password);
+          setRememberMe(true);
+        }
+      } catch (error) {
+        console.error('Error loading saved credentials:', error);
+        localStorage.removeItem('rememberedCredentials');
+      }
+    }
+
+    // Check for lockout status
+    const lockoutData = localStorage.getItem('loginLockout');
+    if (lockoutData) {
+      try {
+        const { attempts, lockoutUntil } = JSON.parse(lockoutData);
+        const lockoutDate = new Date(lockoutUntil);
+        if (lockoutDate > new Date()) {
+          setIsLocked(true);
+          setLockoutTime(lockoutDate);
+          setLoginAttempts(attempts);
+        } else {
+          // Lockout expired, clear it
+          localStorage.removeItem('loginLockout');
+        }
+      } catch (error) {
+        console.error('Error loading lockout data:', error);
+        localStorage.removeItem('loginLockout');
+      }
+    }
+  }, [setValue]);
+
+  // Auto-dismiss success messages
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Auto-dismiss error messages
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  // Handle Remember Me checkbox change
+  const handleRememberMeChange = (checked: boolean) => {
+    setRememberMe(checked);
+    if (!checked) {
+      // Clear saved credentials when unchecked
+      localStorage.removeItem('rememberedCredentials');
+    }
+  };
 
   const onSubmit = async (data: LoginCredentials) => {
     try {
       setIsSubmitting(true);
       setError('');
+      setSuccess('');
+      
+      // Check if account is locked
+      if (isLocked && lockoutTime && lockoutTime > new Date()) {
+        const remainingTime = Math.ceil((lockoutTime.getTime() - new Date().getTime()) / 1000 / 60);
+        setError(`Account temporarily locked. Please try again in ${remainingTime} minutes.`);
+        return;
+      }
       
       // Trim whitespace from inputs
       const trimmedData = {
@@ -38,14 +114,74 @@ const SignIn: React.FC = () => {
       
       if (result.success) {
         console.log('SignIn: Login successful, redirecting...');
-        navigate('/');
+        
+        // Handle Remember Me functionality
+        if (rememberMe) {
+          localStorage.setItem('rememberedCredentials', JSON.stringify({
+            username: trimmedData.username,
+            password: trimmedData.password,
+            rememberMe: true
+          }));
+        } else {
+          localStorage.removeItem('rememberedCredentials');
+        }
+        
+        // Clear any lockout data on successful login
+        localStorage.removeItem('loginLockout');
+        setLoginAttempts(0);
+        setIsLocked(false);
+        setLockoutTime(null);
+        
+        setSuccess('Login successful! Redirecting...');
+        
+        // Small delay to show success message
+        setTimeout(() => {
+          navigate('/');
+        }, 1000);
       } else {
         console.log('SignIn: Login failed:', result.message);
-        setError(result.message);
+        
+        // Handle failed login attempts
+        const newAttempts = loginAttempts + 1;
+        setLoginAttempts(newAttempts);
+        
+        // Advanced error handling based on error message
+        let errorMessage = result.message;
+        
+        if (result.message.toLowerCase().includes('username') || result.message.toLowerCase().includes('user not found')) {
+          errorMessage = '❌ Username not found. Please check your username and try again.';
+        } else if (result.message.toLowerCase().includes('password') || result.message.toLowerCase().includes('invalid password')) {
+          errorMessage = '❌ Incorrect password. Please check your password and try again.';
+        } else if (result.message.toLowerCase().includes('unauthorized') || result.message.toLowerCase().includes('authentication')) {
+          errorMessage = '❌ Authentication failed. Please verify your credentials.';
+        } else if (result.message.toLowerCase().includes('network') || result.message.toLowerCase().includes('connection')) {
+          errorMessage = '🌐 Network error. Please check your internet connection and try again.';
+        } else if (result.message.toLowerCase().includes('server') || result.message.toLowerCase().includes('internal')) {
+          errorMessage = '🔧 Server error. Please try again later or contact support.';
+        }
+        
+        // Implement lockout after 5 failed attempts
+        if (newAttempts >= 5) {
+          const lockoutUntil = new Date();
+          lockoutUntil.setMinutes(lockoutUntil.getMinutes() + 15); // 15 minute lockout
+          
+          localStorage.setItem('loginLockout', JSON.stringify({
+            attempts: newAttempts,
+            lockoutUntil: lockoutUntil.toISOString()
+          }));
+          
+          setIsLocked(true);
+          setLockoutTime(lockoutUntil);
+          errorMessage += `\n\n🔒 Account locked for 15 minutes due to multiple failed attempts.`;
+        } else if (newAttempts >= 3) {
+          errorMessage += `\n\n⚠️ ${5 - newAttempts} attempts remaining before account lockout.`;
+        }
+        
+        setError(errorMessage);
       }
     } catch (error) {
       console.error('SignIn: Unexpected error:', error);
-      setError('An unexpected error occurred');
+      setError('💥 An unexpected error occurred. Please try again or contact support.');
     } finally {
       setIsSubmitting(false);
     }
@@ -71,9 +207,65 @@ const SignIn: React.FC = () => {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CheckCircle className="h-5 w-5 text-green-400" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-green-800">{success}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSuccess('')}
+                  className="text-green-600 hover:text-green-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 text-red-400" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-red-800 whitespace-pre-line">{error}</p>
+                    {loginAttempts > 0 && loginAttempts < 5 && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Failed attempts: {loginAttempts}/5
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setError('')}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Lockout Warning */}
+          {isLocked && lockoutTime && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-yellow-800">
+                    Account temporarily locked
+                  </p>
+                  <p className="text-xs text-yellow-600 mt-1">
+                    Please try again after {lockoutTime.toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -136,7 +328,7 @@ const SignIn: React.FC = () => {
           <div>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (isLocked && lockoutTime ? lockoutTime > new Date() : false)}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm hover:shadow-md"
             >
               {isSubmitting ? (
@@ -144,24 +336,41 @@ const SignIn: React.FC = () => {
                   <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
                   Signing in...
                 </>
+              ) : isLocked && lockoutTime && lockoutTime > new Date() ? (
+                <>
+                  <AlertTriangle className="-ml-1 mr-2 h-4 w-4" />
+                  Account Locked
+                </>
               ) : (
                 'Sign in'
               )}
             </button>
           </div>
 
-          <div className="flex items-center">
-            <input
-              id="remember-me"
-              name="remember-me"
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-              Remember me
-            </label>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                name="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => handleRememberMeChange(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors duration-200"
+              />
+              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
+                Remember me
+                {rememberMe && (
+                  <span className="ml-1 text-xs text-blue-600 font-medium">
+                    (credentials saved)
+                  </span>
+                )}
+              </label>
+            </div>
+            {loginAttempts > 0 && (
+              <div className="text-xs text-gray-500">
+                Attempts: {loginAttempts}/5
+              </div>
+            )}
           </div>
 
         </form>

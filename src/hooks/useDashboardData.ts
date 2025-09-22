@@ -195,9 +195,13 @@ export const useDashboardData = () => {
       const stats: DashboardStats = {
         todaySales,
         todayOrders: todayOrders.length,
-        totalRevenue: orders.reduce((sum: number, order: ApiOrder) => 
-          sum + (order.payment_status === 'paid' ? order.total_amount : 0), 0
-        ),
+        totalRevenue: orders.reduce((sum: number, order: ApiOrder) => {
+          // Only include positive amounts from paid orders
+          if (order.payment_status === 'paid' && order.total_amount > 0) {
+            return sum + order.total_amount;
+          }
+          return sum;
+        }, 0),
         totalOrders: orders.length,
         completedOrders: orders.filter((order: ApiOrder) => order.status === 'completed').length,
         pendingOrders: orders.filter((order: ApiOrder) => 

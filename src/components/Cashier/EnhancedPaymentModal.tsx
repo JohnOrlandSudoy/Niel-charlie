@@ -58,36 +58,130 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [receiptData, setReceiptData] = useState<any>(null);
   const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState<ApiOrder>(order);
+  const [isLoadingDiscount, setIsLoadingDiscount] = useState(false);
+
+  // Update currentOrder when order prop changes
+  useEffect(() => {
+    setCurrentOrder(order);
+    console.log('🔍 EnhancedPaymentModal: Order prop updated:', order);
+  }, [order]);
+
+  // Handle discount application
+  const handleApplyDiscount = useCallback(async (discount: Discount) => {
+    if (!onApplyDiscount) return;
+    
+    setIsLoadingDiscount(true);
+    setIsApplyingDiscount(true);
+    
+    try {
+      console.log('🔍 Applying discount:', discount);
+      const result = await onApplyDiscount(order.id, discount.code);
+      
+      if (result) {
+        console.log('🔍 Discount applied successfully:', result);
+        console.log('🔍 Full result data:', result);
+        
+        // Update the current order with the new discounted totals
+        const updatedOrder = {
+          ...currentOrder,
+          ...result, // This includes the updated totals with discount applied
+          discount_applied: result.discount_applied || discount.code,
+          discount_amount: result.discount_amount || 0,
+          subtotal: result.subtotal || currentOrder.subtotal,
+          tax_amount: result.tax_amount || currentOrder.tax_amount,
+          total_amount: result.total_amount || currentOrder.total_amount
+        };
+        
+        console.log('🔍 Updating currentOrder with discount:', updatedOrder);
+        console.log('🔍 Discount fields in updated order:', {
+          discount_applied: updatedOrder.discount_applied,
+          discount_amount: updatedOrder.discount_amount
+        });
+        
+        setCurrentOrder(updatedOrder);
+        setSelectedDiscount(discount);
+        
+        // Add a small delay to ensure the state update is visible
+        setTimeout(() => {
+          setIsLoadingDiscount(false);
+          setIsApplyingDiscount(false);
+        }, 1000);
+      } else {
+        console.log('🔍 No result from discount application');
+        setIsLoadingDiscount(false);
+        setIsApplyingDiscount(false);
+      }
+    } catch (error) {
+      console.error('🔍 Error applying discount:', error);
+      setError('Failed to apply discount');
+      setIsLoadingDiscount(false);
+      setIsApplyingDiscount(false);
+    }
+  }, [onApplyDiscount, order.id, currentOrder]);
 
   // Calculate totals - handle different possible field names and fallback calculation
   const calculateTotals = () => {
+    let baseSubtotal, baseTax, baseTotal;
+    
     // First try to use pre-calculated totals
-    if (order.subtotal && order.tax_amount && order.total_amount) {
-      return {
-        subtotal: order.subtotal,
-        tax: order.tax_amount,
-        total: order.total_amount
-      };
+    if (currentOrder.subtotal && currentOrder.tax_amount && currentOrder.total_amount) {
+      baseSubtotal = currentOrder.subtotal;
+      baseTax = currentOrder.tax_amount;
+      baseTotal = currentOrder.total_amount;
+    } else {
+      // Fallback: calculate from order items
+      const orderItems = (currentOrder as any).order_items || (currentOrder as any).items || [];
+      baseSubtotal = orderItems.reduce((sum: number, item: any) => {
+        const itemTotal = (item.unit_price || item.price || 0) * (item.quantity || 1);
+        return sum + itemTotal;
+      }, 0);
+      
+      baseTax = baseSubtotal * 0.12; // 12% VAT
+      baseTotal = baseSubtotal + baseTax;
     }
     
-    // Fallback: calculate from order items
-    const orderItems = (order as any).order_items || (order as any).items || [];
-    const calculatedSubtotal = orderItems.reduce((sum: number, item: any) => {
-      const itemTotal = (item.unit_price || item.price || 0) * (item.quantity || 1);
-      return sum + itemTotal;
-    }, 0);
+    // Apply discount if available
+    const discountApplied = (currentOrder as any).discount_applied;
+    const discountCode = discountApplied?.code || discountApplied || (currentOrder as any).discount_code || selectedDiscount?.code || null;
+    const discountAmount = (currentOrder as any).discount_amount || (currentOrder as any).discountAmount || 0;
     
-    const calculatedTax = calculatedSubtotal * 0.12; // 12% VAT
-    const calculatedTotal = calculatedSubtotal + calculatedTax;
+    console.log('🔍 CALCULATION DEBUG:', {
+      baseSubtotal,
+      baseTax,
+      baseTotal,
+      discountCode,
+      discountAmount,
+      selectedDiscount: selectedDiscount
+    });
+    
+    // FIXED: Prevent discounts from exceeding order total
+    const maxAllowedDiscount = baseTotal;
+    const actualDiscountAmount = Math.min(discountAmount, maxAllowedDiscount);
+    
+    // Calculate final total after discount (ensure it's never negative)
+    const finalTotal = Math.max(0, baseTotal - actualDiscountAmount);
+    
+    // Log validation
+    if (discountAmount > maxAllowedDiscount) {
+      console.warn('🚨 DISCOUNT VALIDATION: Discount amount exceeds order total, capped at order total', {
+        originalDiscount: discountAmount,
+        maxAllowed: maxAllowedDiscount,
+        actualDiscount: actualDiscountAmount,
+        finalTotal
+      });
+    }
     
     return {
-      subtotal: calculatedSubtotal,
-      tax: calculatedTax,
-      total: calculatedTotal
+      subtotal: baseSubtotal,
+      tax: baseTax,
+      total: finalTotal,
+      originalTotal: baseTotal,
+      discountAmount: actualDiscountAmount
     };
   };
   
-  const { subtotal, tax, total } = calculateTotals();
+  const { subtotal, tax, total, originalTotal } = calculateTotals();
   
   // Debug logging
   console.log('EnhancedPaymentModal - Order data:', {
@@ -142,28 +236,16 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     }
   };
 
-  // Handle discount application
-  const handleApplyDiscount = useCallback(async (discount: Discount) => {
-    if (!discount || !onApplyDiscount) return;
-    
-    try {
-      setIsApplyingDiscount(true);
-      const result = await onApplyDiscount(order.id, discount.code);
-      if (result) {
-        // Discount applied successfully
-        console.log('Discount applied:', result);
-        setSelectedDiscount(discount);
-      }
-    } catch (error) {
-      console.error('Failed to apply discount:', error);
-    } finally {
-      setIsApplyingDiscount(false);
-    }
-  }, [onApplyDiscount, order.id]);
 
   const handleProcessPayment = async () => {
     if (!paymentData.paymentMethod) {
       setError('Please select a payment method');
+      return;
+    }
+
+    // FIXED: Validate that order total is not negative
+    if (total < 0) {
+      setError('Order total cannot be negative. Please check discount amount.');
       return;
     }
 
@@ -199,6 +281,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         return;
       }
 
+      // FIXED: Additional validation for cash payments
+      if (total <= 0) {
+        setError('Order total must be greater than zero');
+        return;
+      }
+
       setIsProcessing(true);
       setError(null);
 
@@ -208,6 +296,15 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           orderId: order.id,
           orderNumber: order.order_number,
           orderData: order
+        });
+        
+        // Debug discount data specifically
+        console.log('🔍 DISCOUNT DEBUG - Order discount fields:', {
+          discount_applied: (order as any).discount_applied,
+          discount_amount: (order as any).discount_amount,
+          discount_code: (order as any).discount_code,
+          discountAmount: (order as any).discountAmount,
+          allOrderKeys: Object.keys(order)
         });
 
         // Save payment to database using the API utility
@@ -224,6 +321,25 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         const paymentResult = await paymentResponse.json();
         console.log('Payment saved to database:', paymentResult);
 
+        // Extract discount information with comprehensive fallback handling
+        const discountApplied = (currentOrder as any).discount_applied;
+        const discountCode = discountApplied?.code || discountApplied || (currentOrder as any).discount_code || selectedDiscount?.code || null;
+        const discountAmount = (currentOrder as any).discount_amount || (currentOrder as any).discountAmount || 0;
+        
+        // Calculate discount amount if not available but we have a selected discount
+        let finalDiscountAmount = discountAmount;
+        if (finalDiscountAmount === 0 && selectedDiscount && total < (subtotal + tax)) {
+          finalDiscountAmount = (subtotal + tax) - total;
+        }
+        
+        console.log('Extracting discount data for receipt:', {
+          discountApplied,
+          discountCode,
+          discountAmount,
+          orderKeys: Object.keys(order),
+          fullOrder: order
+        });
+
         // Generate receipt data for cash payment
         const receipt = {
           orderNumber: order.order_number,
@@ -236,15 +352,20 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           amountPaid: paymentData.amountPaid,
           change: paymentData.change,
           isOfflineCash: paymentData.isOfflineCash,
-          discountCode: (order as any).discount_applied?.code || null,
-          discountAmount: (order as any).discount_amount || 0
+          discountCode,
+          discountAmount: finalDiscountAmount
         };
         
         console.log('Generated cash payment receipt:', receipt);
-        console.log('Order discount data:', {
-          discount_applied: (order as any).discount_applied,
-          discount_amount: (order as any).discount_amount,
-          discountCode: (order as any).discount_applied?.code || null
+        console.log('🔍 RECEIPT DISCOUNT DEBUG:', {
+          receiptDiscountCode: receipt.discountCode,
+          receiptDiscountAmount: receipt.discountAmount,
+          discountCode,
+          discountAmount,
+          orderDiscountApplied: (order as any).discount_applied,
+          orderDiscountAmount: (order as any).discount_amount,
+          currentOrderDiscountApplied: (currentOrder as any).discount_applied,
+          currentOrderDiscountAmount: (currentOrder as any).discount_amount
         });
 
         setReceiptData(receipt);
@@ -334,6 +455,15 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const handlePayMongoPaymentComplete = useCallback(async () => {
     console.log('PayMongo payment completed, generating receipt...');
     
+    // Debug discount data for PayMongo payments
+    console.log('🔍 PAYMONGO DISCOUNT DEBUG - Order discount fields:', {
+      discount_applied: (order as any).discount_applied,
+      discount_amount: (order as any).discount_amount,
+      discount_code: (order as any).discount_code,
+      discountAmount: (order as any).discountAmount,
+      allOrderKeys: Object.keys(order)
+    });
+    
     try {
       // Save PayMongo payment to database
       const { api } = await import('../../utils/api');
@@ -349,6 +479,25 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       const paymentResult = await paymentResponse.json();
       console.log('PayMongo payment saved to database:', paymentResult);
       
+      // Extract discount information with comprehensive fallback handling
+      const discountApplied = (currentOrder as any).discount_applied;
+      const discountCode = discountApplied?.code || discountApplied || (currentOrder as any).discount_code || selectedDiscount?.code || null;
+      const discountAmount = (currentOrder as any).discount_amount || (currentOrder as any).discountAmount || 0;
+      
+      // Calculate discount amount if not available but we have a selected discount
+      let finalDiscountAmount = discountAmount;
+      if (finalDiscountAmount === 0 && selectedDiscount && total < (subtotal + tax)) {
+        finalDiscountAmount = (subtotal + tax) - total;
+      }
+      
+      console.log('Extracting discount data for PayMongo receipt:', {
+        discountApplied,
+        discountCode,
+        discountAmount,
+        orderKeys: Object.keys(order),
+        fullOrder: order
+      });
+
       // Generate receipt for PayMongo payment
       const receipt = {
         orderNumber: order.order_number,
@@ -362,15 +511,20 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         change: 0,
         isOfflineCash: false,
         paymentIntentId: paymentIntent?.paymentIntentId,
-        discountCode: (order as any).discount_applied?.code || null,
-        discountAmount: (order as any).discount_amount || 0
+        discountCode,
+        discountAmount: finalDiscountAmount
       };
       
       console.log('Generated PayMongo receipt:', receipt);
-      console.log('Order discount data:', {
-        discount_applied: (order as any).discount_applied,
-        discount_amount: (order as any).discount_amount,
-        discountCode: (order as any).discount_applied?.code || null
+      console.log('🔍 PAYMONGO RECEIPT DISCOUNT DEBUG:', {
+        receiptDiscountCode: receipt.discountCode,
+        receiptDiscountAmount: receipt.discountAmount,
+        discountCode,
+        discountAmount,
+        orderDiscountApplied: (order as any).discount_applied,
+        orderDiscountAmount: (order as any).discount_amount,
+        currentOrderDiscountApplied: (currentOrder as any).discount_applied,
+        currentOrderDiscountAmount: (currentOrder as any).discount_amount
       });
       
       setReceiptData(receipt);
@@ -529,47 +683,97 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </span>
                   </div>
                   
-                  {/* Show detailed discount information if applied */}
-                  {(order as any).discount_applied && (order as any).discount_amount && (
-                    <>
-                      <div className="border-t border-gray-200 pt-2 mt-2">
-                        <div className="flex justify-between text-green-600">
-                          <span>Discount ({(order as any).discount_applied}):</span>
-                          <span>-₱{((order as any).discount_amount || 0).toFixed(2)}</span>
+                  {/* Simple discount display matching the desired approach */}
+                  {(() => {
+                    // Show loading state when applying discount
+                    if (isLoadingDiscount) {
+                      return (
+                        <div className="flex justify-between">
+                          <span>discount:</span>
+                          <span className="text-red-600 font-medium flex items-center">
+                            <Loader2 className="animate-spin h-4 w-4 mr-1" />
+                            Applying...
+                          </span>
                         </div>
-                        {/* Show discount calculation details */}
-                        {(() => {
-                          const originalTotal = subtotal + tax;
-                          const discountAmount = (order as any).discount_amount || 0;
-                          const discountPercentage = originalTotal > 0 ? ((discountAmount / originalTotal) * 100) : 0;
-                          
-                          return (
-                            <div className="text-xs text-green-600 mt-1 pl-2">
-                              <div>Original Total: ₱{originalTotal.toFixed(2)}</div>
-                              <div>Discount: {discountPercentage.toFixed(1)}% off</div>
-                              <div>You Save: ₱{discountAmount.toFixed(2)}</div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </>
-                  )}
+                      );
+                    }
+                    
+                    // Extract discount information with comprehensive fallback handling
+                    const discountApplied = (currentOrder as any).discount_applied;
+                    const discountCode = discountApplied?.code || discountApplied || (currentOrder as any).discount_code || selectedDiscount?.code || null;
+                    const discountAmount = (currentOrder as any).discount_amount || (currentOrder as any).discountAmount || 0;
+                    
+                    console.log('🔍 ORDER SUMMARY DISCOUNT DEBUG:', {
+                      discountApplied,
+                      discountCode,
+                      discountAmount,
+                      selectedDiscount: selectedDiscount,
+                      currentOrderKeys: Object.keys(currentOrder),
+                      originalOrderKeys: Object.keys(order)
+                    });
+                    
+                    // Show discount if we have either the discount data or a selected discount
+                    if ((discountCode && discountAmount > 0) || selectedDiscount) {
+                      // Use the actual discount amount from the order, not a fallback
+                      const actualDiscountAmount = discountAmount > 0 ? discountAmount : 0;
+                      
+                      console.log('🔍 DISCOUNT DISPLAY DEBUG:', {
+                        discountAmount,
+                        actualDiscountAmount,
+                        selectedDiscount,
+                        discountCode
+                      });
+                      
+                      return (
+                        <div className="flex justify-between">
+                          <span>discount:</span>
+                          <span className="text-red-600 font-medium">-{actualDiscountAmount.toFixed(2)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   
                   <div className="flex justify-between font-medium text-lg border-t pt-2">
                     <span>Total:</span>
-                    <span className={total === 0 ? 'text-red-600 font-bold' : ''}>
-                      ₱{total.toFixed(2)}
+                    <span className={total === 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
+                      ₱{originalTotal.toFixed(2)}
                     </span>
                   </div>
                   
-                  {/* Show savings summary if discount is applied */}
-                  {(order as any).discount_applied && (order as any).discount_amount && (
-                    <div className="bg-green-50 border border-green-200 rounded p-2 mt-2">
-                      <div className="text-xs text-green-700 text-center">
-                        💰 You saved ₱{((order as any).discount_amount || 0).toFixed(2)} with {(order as any).discount_applied}!
-                      </div>
-                    </div>
-                  )}
+                  {/* Show final discounted total in red if discount is applied */}
+                  {(() => {
+                    // Show loading state when applying discount
+                    if (isLoadingDiscount) {
+                      return (
+                        <div className="flex justify-between font-medium text-lg">
+                          <span>total:</span>
+                          <span className="text-red-600 font-bold flex items-center">
+                            <Loader2 className="animate-spin h-4 w-4 mr-1" />
+                            Calculating...
+                          </span>
+                        </div>
+                      );
+                    }
+                    
+                    const discountApplied = (currentOrder as any).discount_applied;
+                    const discountCode = discountApplied?.code || discountApplied || (currentOrder as any).discount_code || selectedDiscount?.code || null;
+                    const discountAmount = (currentOrder as any).discount_amount || (currentOrder as any).discountAmount || 0;
+                    
+                    // Show final total if we have either the discount data or a selected discount
+                    if ((discountCode && discountAmount > 0) || selectedDiscount) {
+                      return (
+                        <div className="flex justify-between font-medium text-lg">
+                          <span>total:</span>
+                          <span className="text-red-600 font-bold">
+                            ₱{total.toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
                 </div>
                 {total === 0 && (
                   <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
