@@ -3,7 +3,7 @@ import { offlineApiManager } from './offlineApiManager';
 import { config } from './config';
 
 // Force the correct API URL to override any cached configuration
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'https://server-resturant-2.onrender.com/api';
 console.log('API_BASE_URL configured as:', API_BASE_URL);
 console.log('Config object:', config);
 console.log('Config API baseUrl:', config.api.baseUrl);

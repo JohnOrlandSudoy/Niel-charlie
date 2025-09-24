@@ -2,38 +2,7 @@ import bcrypt from 'bcryptjs';
 import { User, UserRole, LoginCredentials, SignUpData } from '../types/auth';
 
 // Mock users database - In production, this would be replaced with Supabase
-const mockUsers: User[] = [
-  {
-    id: '1',
-    username: 'admin',
-    email: 'admin@restaurant.com',
-    role: 'admin',
-    firstName: 'Admin',
-    lastName: 'User',
-    createdAt: '2024-01-01T00:00:00Z',
-    lastLogin: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: '2',
-    username: 'cashier',
-    email: 'cashier@restaurant.com',
-    role: 'cashier',
-    firstName: 'Cashier',
-    lastName: 'User',
-    createdAt: '2024-01-01T00:00:00Z',
-    lastLogin: '2024-01-15T09:15:00Z'
-  },
-  {
-    id: '3',
-    username: 'kitchen',
-    email: 'kitchen@restaurant.com',
-    role: 'kitchen',
-    firstName: 'Kitchen',
-    lastName: 'User',
-    createdAt: '2024-01-01T00:00:00Z',
-    lastLogin: '2024-01-15T08:45:00Z'
-  }
-];
+
 
 // Mock passwords - In production, these would be stored hashed in Supabase
 const mockPasswords = {
