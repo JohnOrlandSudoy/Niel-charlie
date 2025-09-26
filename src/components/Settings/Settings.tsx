@@ -45,7 +45,7 @@ const Settings: React.FC = () => {
       console.log('Using token:', token.substring(0, 20) + '...');
       
       // Use direct API call to get payment methods
-      const response = await fetch('https://server-resturant-2.onrender.com/api/payments/admin/methods', {
+      const response = await fetch('https://server-resturant-3.onrender.com/api/payments/admin/methods', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
