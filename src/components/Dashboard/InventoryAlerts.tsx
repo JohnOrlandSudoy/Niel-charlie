@@ -92,7 +92,7 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
                 <span className="font-medium">
                   {alert.current_stock} {alert.unit}
                 </span>
-                <span className="text-gray-600"> remaining (min: {alert.minimum_stock} {alert.unit})</span>
+                <span className="text-gray-600"> remaining (min: {alert.min_stock_threshold} {alert.unit})</span>
               </div>
 
               {alert.menu_items && alert.menu_items.length > 0 && (

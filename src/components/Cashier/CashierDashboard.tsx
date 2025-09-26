@@ -241,7 +241,7 @@ const CashierDashboard: React.FC = React.memo(() => {
                 Cashier Dashboard
               </h1>
               <p className="text-sm sm:text-base text-gray-600 mt-1 truncate">
-                Welcome back, {user?.email}! Process orders efficiently.
+                Welcome back, {user?.firstName}! Process orders efficiently.
               </p>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-3">

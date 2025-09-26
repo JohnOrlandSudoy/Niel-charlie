@@ -141,7 +141,7 @@ export const useDashboardData = () => {
       // Process inventory data
       const ingredients = inventoryResult.success ? inventoryResult.data : [];
       const lowStockItems = ingredients.filter((item: any) => 
-        item.current_stock <= item.minimum_stock && item.current_stock > 0
+        item.min_stock_threshold && item.current_stock <= item.min_stock_threshold && item.current_stock > 0
       );
       const outOfStockItems = ingredients.filter((item: any) => 
         item.current_stock === 0
