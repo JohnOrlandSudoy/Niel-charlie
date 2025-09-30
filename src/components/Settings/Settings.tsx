@@ -94,7 +94,7 @@ const Settings: React.FC = () => {
       }
       
       // Use the specific API endpoint for each payment method
-      const endpoint = `http://localhost:3000/api/payments/admin/methods/${methodKey}/toggle`;
+      const endpoint = `https://server-resturant-3.onrender.com/api/payments/admin/methods/${methodKey}/toggle`;
       const response = await fetch(endpoint, {
         method: 'PUT',
         headers: {

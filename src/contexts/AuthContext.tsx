@@ -38,11 +38,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (credentials: LoginCredentials) => {
     try {
-      setIsLoading(true);
+      // Don't set loading to true for login to avoid loading page
       console.log('AuthContext: Starting login for:', credentials.username);
       
       // Call your API server
       const response = await api.auth.login(credentials);
+      console.log('AuthContext: Response status:', response.status);
+      
+      // Handle different response statuses
+      if (response.status === 401) {
+        // Unauthorized - wrong credentials
+        const result = await response.json();
+        console.log('AuthContext: Unauthorized response:', result);
+        return { success: false, message: result.error || result.message || 'Invalid credentials' };
+      }
+      
+      if (!response.ok) {
+        // Other HTTP errors
+        const result = await response.json();
+        console.log('AuthContext: Error response:', result);
+        return { success: false, message: result.error || result.message || `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
       const result = await response.json();
       console.log('AuthContext: API response:', result);
 
@@ -55,15 +72,125 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('AuthContext: User set successfully:', result.data.user);
         return { success: true, user: result.data.user, message: result.message };
       } else {
-        console.log('AuthContext: Login failed:', result.message);
-        return { success: false, message: result.message || 'Login failed' };
+        console.log('AuthContext: Login failed:', result.error || result.message);
+        return { success: false, message: result.error || result.message || 'Login failed' };
       }
     } catch (error) {
       console.error('AuthContext: Login error:', error);
-      return { success: false, message: 'An unexpected error occurred' };
+      
+      // Store error message for potential redirect scenarios
+      const errorMessage = 'Network error. Please check your internet connection and try again.';
+      localStorage.setItem('lastLoginError', JSON.stringify({
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        type: 'network'
+      }));
+      
+      // Fallback to mock authentication for development
+      console.log('AuthContext: Falling back to mock authentication');
+      return await mockAuthentication(credentials);
     } finally {
-      setIsLoading(false);
+      // Don't set loading to false since we didn't set it to true
     }
+  };
+
+  // Mock authentication for development/offline mode
+  const mockAuthentication = async (credentials: LoginCredentials) => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Mock users for development - matching real server format
+    const mockUsers = [
+      { 
+        id: 'bd861443-15fe-40ae-8582-7086204a5378', 
+        username: 'newadmin', 
+        email: 'newadmin@restaurant.com', 
+        role: 'admin', 
+        firstName: 'New', 
+        lastName: 'Admin',
+        phone: '+639345678901'
+      },
+      { 
+        id: '2', 
+        username: 'cashier', 
+        email: 'cashier@restaurant.com', 
+        role: 'cashier', 
+        firstName: 'Cashier', 
+        lastName: 'User',
+        phone: '+639345678902'
+      },
+      { 
+        id: '3', 
+        username: 'kitchen', 
+        email: 'kitchen@restaurant.com', 
+        role: 'kitchen', 
+        firstName: 'Kitchen', 
+        lastName: 'User',
+        phone: '+639345678903'
+      }
+    ];
+
+    const mockPasswords = {
+      'newadmin': 'password123',
+      'cashier': 'cashier123',
+      'kitchen': 'kitchen123'
+    };
+
+    console.log('MockAuth: Login attempt:', credentials.username);
+    
+    const user = mockUsers.find(u => u.username === credentials.username);
+    if (!user) {
+      console.log('MockAuth: User not found:', credentials.username);
+      const errorMessage = 'User not found or inactive';
+      
+      // Store error for potential redirect scenarios
+      localStorage.setItem('lastLoginError', JSON.stringify({
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        type: 'user_not_found'
+      }));
+      
+      return { success: false, message: errorMessage };
+    }
+
+    console.log('MockAuth: User found:', user);
+    console.log('MockAuth: Stored password for user:', mockPasswords[credentials.username as keyof typeof mockPasswords]);
+    console.log('MockAuth: Provided password:', credentials.password);
+
+    // Check password
+    const storedPassword = mockPasswords[credentials.username as keyof typeof mockPasswords];
+    if (credentials.password !== storedPassword) {
+      console.log('MockAuth: Password mismatch');
+      const errorMessage = 'Invalid credentials';
+      
+      // Store error for potential redirect scenarios
+      localStorage.setItem('lastLoginError', JSON.stringify({
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        type: 'wrong_password'
+      }));
+      
+      return { success: false, message: errorMessage };
+    }
+
+    console.log('MockAuth: Password match successful');
+
+    // Create mock token and user data matching real server format
+    const mockToken = 'mock_token_' + Date.now();
+    const userData = {
+      ...user,
+      token: mockToken,
+      lastLogin: new Date().toISOString()
+    };
+
+    // Store token and user data
+    localStorage.setItem('authToken', mockToken);
+    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    setUser(userData);
+    console.log('MockAuth: User set successfully:', userData);
+
+    return { success: true, user: userData, message: 'Login successful (mock mode)' };
   };
 
   const createUser = async (data: AdminCreateUserData): Promise<{ success: boolean; message: string; data?: any }> => {

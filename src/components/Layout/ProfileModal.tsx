@@ -39,7 +39,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
 
       // Try different API endpoints
       const apiEndpoints = [
-        'http://localhost:3000/api/auth/profile',
+        'https://server-resturant-3.onrender.com/api/auth/profile',
         '/api/auth/profile'
       ];
 

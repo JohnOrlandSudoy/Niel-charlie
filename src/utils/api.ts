@@ -78,14 +78,15 @@ export const directApiRequest = async (
   console.log('Response statusText:', response.statusText);
   
   // If unauthorized, clear auth data and redirect to login
-  // But skip redirect for endpoints that might not be implemented yet
+  // But skip redirect for endpoints that might not be implemented yet or for login attempts
   if (response.status === 401) {
     const skipRedirectEndpoints = [
       '/auth/users',
       '/auth/create-admin',
       '/auth/create-cashier',
       '/auth/create-kitchen',
-      '/auth/users/'
+      '/auth/users/',
+      '/auth/login'  // Don't redirect on login failures - let the component handle the error
     ];
     
     const shouldSkipRedirect = skipRedirectEndpoints.some(skipEndpoint => 
@@ -95,6 +96,15 @@ export const directApiRequest = async (
     if (!shouldSkipRedirect) {
       localStorage.removeItem('authToken');
       localStorage.removeItem('userData');
+      
+      // Store error message for display after redirect
+      const errorMessage = 'Session expired. Please sign in again.';
+      localStorage.setItem('lastLoginError', JSON.stringify({
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        type: 'session_expired'
+      }));
+      
       window.location.href = '/signin';
     }
   }

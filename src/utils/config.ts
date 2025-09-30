@@ -12,7 +12,7 @@ export const config = {
 
   // API Configuration
   api: {
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://server-resturant-2.onrender.com/api',
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://server-resturant-3.onrender.com/api',
     timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
   },
 

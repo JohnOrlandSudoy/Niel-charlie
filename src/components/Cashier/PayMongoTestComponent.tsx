@@ -154,7 +154,7 @@ const PayMongoTestComponent: React.FC<PayMongoTestComponentProps> = ({ onClose }
               <div>
                 <span className="font-medium text-gray-700">URL:</span>
                 <span className="ml-2 font-mono bg-gray-200 px-2 py-1 rounded">
-                  http://localhost:3000/api/payments/cancel/{paymentIntentId}
+                https://server-resturant-3.onrender.com/api/payments/cancel/{paymentIntentId}
                 </span>
               </div>
               <div>

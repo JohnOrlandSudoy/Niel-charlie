@@ -33,7 +33,7 @@ export class AuthService {
       const user = mockUsers.find(u => u.username === credentials.username);
       if (!user) {
         console.log('User not found:', credentials.username);
-        return { success: false, message: 'Invalid username or password' };
+        return { success: false, message: 'Username not found. Please check your username and try again.' };
       }
 
       console.log('User found:', user);
@@ -44,7 +44,7 @@ export class AuthService {
       const storedPassword = mockPasswords[credentials.username as keyof typeof mockPasswords];
       if (credentials.password !== storedPassword) {
         console.log('Password mismatch');
-        return { success: false, message: 'Invalid username or password' };
+        return { success: false, message: 'Incorrect password. Please check your password and try again.' };
       }
 
       console.log('Password match successful');

@@ -44,7 +44,7 @@ class ApiManager {
 
   constructor(config: Partial<ApiConfig> = {}) {
     this.config = {
-      baseURL: 'https://server-resturant-2.onrender.com/api',
+      baseURL: 'https://server-resturant-3.onrender.com/api',
       timeout: 30000, // 30 seconds
       retryAttempts: 3,
       retryDelay: 1000, // 1 second

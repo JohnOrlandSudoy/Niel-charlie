@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginCredentials } from '../../types/auth';
@@ -16,6 +16,8 @@ const SignIn: React.FC = () => {
   const [lockoutTime, setLockoutTime] = useState<Date | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const {
     register,
@@ -60,7 +62,46 @@ const SignIn: React.FC = () => {
         localStorage.removeItem('loginLockout');
       }
     }
-  }, [setValue]);
+
+    // Check for error messages from URL parameters or localStorage
+    const errorParam = searchParams.get('error');
+    const errorType = searchParams.get('errorType');
+    const lastLoginError = localStorage.getItem('lastLoginError');
+    
+    if (errorParam) {
+      // Show error from URL parameter
+      setError(`❌ ${decodeURIComponent(errorParam)}`);
+      // Clear the URL parameter
+      setSearchParams({});
+    } else if (lastLoginError) {
+      // Show error from localStorage (for page reloads)
+      const errorData = JSON.parse(lastLoginError);
+      let errorMessage = errorData.message;
+      
+      // Enhance error message based on type
+      if (errorData.type === 'network') {
+        errorMessage = '🌐 Network error. Please check your internet connection and try again.';
+      } else if (errorData.type === 'unauthorized' || errorData.type === 'session_expired') {
+        errorMessage = '❌ Session expired. Please sign in again.';
+      } else if (errorData.type === 'server') {
+        errorMessage = '🔧 Server error. Please try again later or contact support.';
+      } else if (errorData.type === 'user_not_found') {
+        errorMessage = '❌ Username not found. Please check your username and try again.';
+      } else if (errorData.type === 'wrong_password') {
+        errorMessage = '❌ Incorrect password. Please check your password and try again.';
+      }
+      
+      setError(errorMessage);
+      
+      // Show browser alert for critical errors
+      if (errorData.type === 'network' || errorData.type === 'server') {
+        alert(`Authentication Error:\n\n${errorMessage}\n\nPlease check your connection and try again.`);
+      }
+      
+      // Clear the stored error
+      localStorage.removeItem('lastLoginError');
+    }
+  }, [setValue, searchParams, setSearchParams]);
 
   // Auto-dismiss success messages
   useEffect(() => {
@@ -87,6 +128,29 @@ const SignIn: React.FC = () => {
     }
   };
 
+  // Helper function to validate credentials format
+  const validateCredentials = (username: string, password: string) => {
+    const errors: string[] = [];
+    
+    if (!username || username.trim().length === 0) {
+      errors.push('Username is required');
+    }
+    
+    if (!password || password.trim().length === 0) {
+      errors.push('Password is required');
+    }
+    
+    if (username && username.length < 3) {
+      errors.push('Username must be at least 3 characters long');
+    }
+    
+    if (password && password.length < 6) {
+      errors.push('Password must be at least 6 characters long');
+    }
+    
+    return errors;
+  };
+
   const onSubmit = async (data: LoginCredentials) => {
     try {
       setIsSubmitting(true);
@@ -106,6 +170,13 @@ const SignIn: React.FC = () => {
         password: data.password.trim(),
         rememberMe: rememberMe
       };
+      
+      // Validate credentials format
+      const validationErrors = validateCredentials(trimmedData.username, trimmedData.password);
+      if (validationErrors.length > 0) {
+        setError(`❌ ${validationErrors.join(', ')}`);
+        return;
+      }
       
       console.log('SignIn: Form submitted with data:', trimmedData);
       
@@ -145,12 +216,15 @@ const SignIn: React.FC = () => {
         const newAttempts = loginAttempts + 1;
         setLoginAttempts(newAttempts);
         
-        // Advanced error handling based on error message
+        // Enhanced error handling with specific messages
         let errorMessage = result.message;
         
-        if (result.message.toLowerCase().includes('username') || result.message.toLowerCase().includes('user not found')) {
-          errorMessage = '❌ Username not found. Please check your username and try again.';
-        } else if (result.message.toLowerCase().includes('password') || result.message.toLowerCase().includes('invalid password')) {
+        // Check for specific error types and provide user-friendly messages
+        if (result.message.toLowerCase().includes('user not found') || result.message.toLowerCase().includes('inactive')) {
+          errorMessage = '❌ User not found or inactive. Please check your username and try again.';
+        } else if (result.message.toLowerCase().includes('invalid credentials')) {
+          errorMessage = '❌ Invalid credentials. Please check your username and password.';
+        } else if (result.message.toLowerCase().includes('incorrect password') || result.message.toLowerCase().includes('invalid password')) {
           errorMessage = '❌ Incorrect password. Please check your password and try again.';
         } else if (result.message.toLowerCase().includes('unauthorized') || result.message.toLowerCase().includes('authentication')) {
           errorMessage = '❌ Authentication failed. Please verify your credentials.';
@@ -158,6 +232,13 @@ const SignIn: React.FC = () => {
           errorMessage = '🌐 Network error. Please check your internet connection and try again.';
         } else if (result.message.toLowerCase().includes('server') || result.message.toLowerCase().includes('internal')) {
           errorMessage = '🔧 Server error. Please try again later or contact support.';
+        } else if (result.message.toLowerCase().includes('account') && result.message.toLowerCase().includes('locked')) {
+          errorMessage = '🔒 Account is temporarily locked. Please try again later.';
+        } else if (result.message.toLowerCase().includes('inactive') || result.message.toLowerCase().includes('disabled')) {
+          errorMessage = '⚠️ Account is inactive. Please contact your administrator.';
+        } else {
+          // Default fallback for unknown errors
+          errorMessage = `❌ ${result.message}`;
         }
         
         // Implement lockout after 5 failed attempts
@@ -239,6 +320,21 @@ const SignIn: React.FC = () => {
                       <p className="text-xs text-red-600 mt-1">
                         Failed attempts: {loginAttempts}/5
                       </p>
+                    )}
+                    {error.includes('User not found') && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        💡 <strong>Tip:</strong> Make sure you're using the correct username. Contact your administrator if you need help.
+                      </div>
+                    )}
+                    {error.includes('Invalid credentials') && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        💡 <strong>Tip:</strong> Check your username and password. Use the eye icon to verify what you've typed.
+                      </div>
+                    )}
+                    {error.includes('Incorrect password') && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        💡 <strong>Tip:</strong> Check for typos in your password. Use the eye icon to verify what you've typed.
+                      </div>
                     )}
                   </div>
                 </div>
