@@ -414,7 +414,7 @@ const OrderHistory: React.FC = () => {
           'Payment Status': order.payment_status.toUpperCase(),
           'Payment Method': order.payment_method || '',
           'Subtotal': order.subtotal || 0,
-          'Tax Amount': order.tax_amount || 0,
+          'VAT Amount': order.tax_amount || 0,
           'Discount Amount': order.discount_amount || 0,
           'Total Amount': order.total_amount,
           'Special Instructions': order.special_instructions || '',
@@ -883,7 +883,6 @@ const OrderHistory: React.FC = () => {
   const totalRevenue = orders.filter(o => o.payment_status === 'paid').reduce((sum, order) => sum + order.total_amount, 0);
   const totalOrders = totalItems; // Use total from API pagination
   const completedOrders = orders.filter(o => o.status === 'completed').length;
-  const pendingPayments = orders.filter(o => o.payment_status === 'unpaid' && o.status === 'completed').length;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -958,7 +957,7 @@ const OrderHistory: React.FC = () => {
       )}
 
       {/* Summary Stats - Responsive */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <p className="text-xs sm:text-sm font-medium text-gray-600">Total Revenue</p>
           <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">₱{totalRevenue.toLocaleString()}</p>
@@ -970,10 +969,6 @@ const OrderHistory: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <p className="text-xs sm:text-sm font-medium text-gray-600">Completed</p>
           <p className="text-lg sm:text-2xl font-bold text-emerald-600 mt-1">{completedOrders}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <p className="text-xs sm:text-sm font-medium text-gray-600">Pending Payments</p>
-          <p className="text-lg sm:text-2xl font-bold text-red-600 mt-1">{pendingPayments}</p>
         </div>
       </div>
 
@@ -1093,14 +1088,7 @@ const OrderHistory: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <input
-                        type="checkbox"
-                        checked={selectedOrders.length === orders.length && orders.length > 0}
-                        onChange={handleSelectAll}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                    </th>
+                    {/* Checkbox and status columns removed */}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Details
                     </th>
@@ -1114,27 +1102,17 @@ const OrderHistory: React.FC = () => {
                       Total
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Payment
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {orders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
-                      <td className="w-12 px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleOrderSelect(order.id)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                      </td>
+                      {/* Checkbox cell removed */}
                       <td className="px-6 py-4">
                         <div>
                           <div className="flex items-center space-x-2">
@@ -1270,26 +1248,9 @@ const OrderHistory: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
-                          {order.status}
-                        </span>
-                        {order.status === 'completed' && (
-                          <div className="text-xs text-gray-500 mt-1 truncate" title={`Completed: ${new Date(order.updated_at).toLocaleString()}`}>
-                            Completed: {new Date(order.updated_at).toLocaleString()}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentBadge(order.payment_status)}`}>
-                          {order.payment_status}
-                        </span>
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
-                            <Eye className="h-4 w-4" />
-                          </button>
+                          
                           <button 
                             onClick={() => handlePrintOrder(order)}
                             className="text-gray-600 hover:text-gray-700 p-1 rounded" 
@@ -1343,14 +1304,7 @@ const OrderHistory: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-12 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <input
-                        type="checkbox"
-                        checked={selectedOrders.length === orders.length && orders.length > 0}
-                        onChange={handleSelectAll}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                    </th>
+                    {/* Checkbox and status columns removed */}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Details
                     </th>
@@ -1361,7 +1315,7 @@ const OrderHistory: React.FC = () => {
                       Total
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Payment
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -1371,14 +1325,7 @@ const OrderHistory: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {orders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-200">
-                      <td className="w-12 px-4 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleOrderSelect(order.id)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                      </td>
+                      {/* Checkbox cell removed */}
                       <td className="px-4 py-4">
                         <div>
                           <div className="flex items-center space-x-2">
@@ -1425,11 +1372,6 @@ const OrderHistory: React.FC = () => {
                           {order.payment_status}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-1">
                           <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
@@ -1473,17 +1415,13 @@ const OrderHistory: React.FC = () => {
                   <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors duration-200">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start space-x-3 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleOrderSelect(order.id)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
-                        />
+                        {/* Checkbox removed */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2">
                             <h3 className="text-sm font-medium text-gray-900 truncate">
                               {order.order_number}
                             </h3>
+                            {/* Status badge removed */}
                             {((order.order_items && order.order_items.length > 0) || (order.items && order.items.length > 0)) ? (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
                                 <Package className="h-3 w-3 mr-1" />
@@ -1520,14 +1458,8 @@ const OrderHistory: React.FC = () => {
                           
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(order.status)}`}>
-                                {order.status}
-                              </span>
-                              <span className={`px-2 py-1 rounded-full text-xs ${
-                                order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                              }`}>
-                                {order.order_type.replace('_', ' ')}
-                              </span>
+                              {/* Status badge removed */}
+                              <span className={`px-2 py-1 rounded-full text-xs ${order.order_type === 'dine_in' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{order.order_type.replace('_', ' ')}</span>
                             </div>
                             <div className="text-xs text-gray-500">
                               {new Date(order.created_at).toLocaleDateString()}
@@ -1576,12 +1508,7 @@ const OrderHistory: React.FC = () => {
                 {orders.map((order) => (
                   <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors duration-200">
                     <div className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedOrders.includes(order.id)}
-                        onChange={() => handleOrderSelect(order.id)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
-                      />
+                      {/* Checkbox removed */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="text-sm font-medium text-gray-900 truncate">

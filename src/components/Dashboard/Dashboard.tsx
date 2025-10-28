@@ -10,9 +10,10 @@ import StockUsageChart from './StockUsageChart';
 
 interface DashboardProps {
   onNavigateToInventory?: () => void;
+  onNavigateToOrders?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigateToOrders }) => {
   const { user } = useAuth();
   const { lastUpdated, refresh, isLoading, stats } = useDashboardData();
 
@@ -57,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
         </div>
       </div>
 
-      <StatsCards />
+  <StatsCards />
       
       {/* Sales Chart - Full Width */}
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
@@ -66,13 +67,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory }) => {
 
       {/* Recent Orders and Inventory Alerts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        <RecentOrders />
+        <RecentOrders onViewAllOrders={onNavigateToOrders} />
         <InventoryAlerts onViewAllAlerts={onNavigateToInventory} />
       </div>
 
       {/* Stock Usage Chart and System Overview */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        <StockUsageChart />
+  <StockUsageChart onViewAllItems={onNavigateToInventory} />
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center space-x-3 mb-6">
             <div className="p-2 bg-blue-100 rounded-lg">

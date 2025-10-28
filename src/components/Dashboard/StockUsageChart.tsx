@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { TrendingDown, Package, Loader2 } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
-const StockUsageChart: React.FC = () => {
+interface StockUsageChartProps {
+  onViewAllItems?: () => void;
+}
+
+const StockUsageChart: React.FC<StockUsageChartProps> = ({ onViewAllItems }) => {
   const { lowStockAlerts, stats, isLoading, error } = useDashboardData();
   const [timeRange, setTimeRange] = useState('week');
 
@@ -145,7 +149,11 @@ const StockUsageChart: React.FC = () => {
                 <span className="text-gray-600">Low Stock ({stats.lowStockItems})</span>
               </div>
             </div>
-            <button className="text-blue-600 hover:text-blue-700 font-medium touch-manipulation text-left sm:text-right">
+            <button
+              onClick={() => onViewAllItems?.()}
+              className="text-blue-600 hover:text-blue-700 font-medium touch-manipulation text-left sm:text-right"
+              aria-label="View all inventory items"
+            >
               View All Items
             </button>
           </div>

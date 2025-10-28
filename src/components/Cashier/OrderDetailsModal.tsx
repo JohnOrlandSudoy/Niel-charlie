@@ -240,7 +240,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = React.memo(({
                 {/* Order Totals with Discount Information */}
                 <div className="border-t border-gray-200 pt-2 mt-2">
                   <div><span className="font-medium">Subtotal:</span> ₱{displayTotals.subtotal.toFixed(2)}</div>
-                  <div><span className="font-medium">Tax (12%):</span> ₱{displayTotals.tax.toFixed(2)}</div>
+                  <div><span className="font-medium">VAT (12%):</span> ₱{displayTotals.tax.toFixed(2)}</div>
                   
                   {/* Enhanced discount display matching receipt approach */}
                   {(() => {

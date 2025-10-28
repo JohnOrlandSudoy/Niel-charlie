@@ -677,7 +677,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Tax (12%):</span>
+                    <span>Vat (12%):</span>
                     <span className={tax === 0 ? 'text-red-600 font-medium' : ''}>
                       ₱{tax.toFixed(2)}
                     </span>

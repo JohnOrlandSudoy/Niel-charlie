@@ -82,7 +82,7 @@ const EnhancedAdminLayout: React.FC = () => {
       case 'dashboard':
         return (
           <PageWrapper pageId="Dashboard">
-            <Dashboard />
+            <Dashboard onNavigateToInventory={() => navigateTo('inventory')} onNavigateToOrders={() => navigateTo('orders')} />
           </PageWrapper>
         );
       case 'inventory':

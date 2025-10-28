@@ -383,7 +383,7 @@ const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                     <span className="text-red-600">-{formatCurrency(receiptData.order.discount)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Tax:</span>
+                    <span>VAT:</span>
                     <span>{formatCurrency(receiptData.order.tax)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-lg border-t border-gray-300 pt-2">

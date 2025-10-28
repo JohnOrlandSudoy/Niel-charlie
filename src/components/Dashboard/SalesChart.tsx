@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BarChart3, TrendingUp, Loader2 } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 const SalesChart: React.FC = () => {
-  const [timeRange, setTimeRange] = useState('week');
-  const { salesData, stats, isLoading, error } = useDashboardData();
+  const { salesData = [], stats, isLoading, error } = useDashboardData();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
@@ -15,9 +14,10 @@ const SalesChart: React.FC = () => {
     }).format(amount);
   };
 
-  const maxSales = salesData.length > 0 ? Math.max(...salesData.map(d => d.sales)) : 0;
-  const totalSales = salesData.reduce((sum, day) => sum + day.sales, 0);
-  const totalOrders = salesData.reduce((sum, day) => sum + day.orders, 0);
+  const dataToUse = Array.isArray(salesData) ? salesData : [];
+  const maxSales = dataToUse.length > 0 ? Math.max(...dataToUse.map(d => d.sales)) : 0;
+  const totalSales = dataToUse.reduce((sum, day) => sum + (day.sales || 0), 0);
+  const totalOrders = dataToUse.reduce((sum, day) => sum + (day.orders || 0), 0);
 
   if (isLoading) {
     return (
@@ -53,25 +53,12 @@ const SalesChart: React.FC = () => {
           <h3 className="text-base sm:text-lg font-semibold text-gray-900">Sales Overview</h3>
         </div>
         
-        <div className="flex space-x-1 sm:space-x-2">
-          {['week', 'month', 'year'].map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors duration-200 touch-manipulation ${
-                timeRange === range
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {range.charAt(0).toUpperCase() + range.slice(1)}
-            </button>
-          ))}
-        </div>
+        {/* No time-range controls: using hook-provided sales data only */}
+        <div />
       </div>
 
       <div className="h-48 sm:h-64 flex items-end space-x-2 sm:space-x-4">
-        {salesData.length > 0 ? salesData.map((data, index) => (
+        {dataToUse.length > 0 && dataToUse.map((data: any, index: number) => (
           <div key={index} className="flex-1 flex flex-col items-center">
             <div className="w-full flex flex-col items-center space-y-1 sm:space-y-2">
               <div
@@ -90,7 +77,9 @@ const SalesChart: React.FC = () => {
               </div>
             </div>
           </div>
-        )) : (
+        ))}
+
+        {dataToUse.length === 0 && (
           <div className="flex-1 flex items-center justify-center h-full">
             <p className="text-sm text-gray-500">No sales data available</p>
           </div>
@@ -110,11 +99,11 @@ const SalesChart: React.FC = () => {
           </div>
         </div>
         
-        <div className="text-left sm:text-right">
-          <p className="text-sm text-gray-500">Total Sales (7 days)</p>
-          <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(totalSales)}</p>
-          <p className="text-xs text-gray-500">{totalOrders} orders</p>
-        </div>
+          <div className="text-left sm:text-right">
+            <p className="text-sm text-gray-500">Total Sales ({dataToUse.length} day{dataToUse.length !== 1 ? 's' : ''})</p>
+            <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(totalSales)}</p>
+            <p className="text-sm text-gray-500">{totalOrders} orders</p>
+          </div>
       </div>
     </div>
   );

@@ -3,7 +3,11 @@ import { Clock, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { Order as ApiOrder } from '../../types/orders';
 
-const RecentOrders: React.FC = () => {
+interface RecentOrdersProps {
+  onViewAllOrders?: () => void;
+}
+
+const RecentOrders: React.FC<RecentOrdersProps> = ({ onViewAllOrders }) => {
   const { recentOrders, isLoading, error } = useDashboardData();
 
   const formatCurrency = (amount: number) => {
@@ -100,7 +104,11 @@ const RecentOrders: React.FC = () => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900">Recent Orders</h3>
-        <button className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 touch-manipulation">
+        <button
+          onClick={() => onViewAllOrders?.()}
+          className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 touch-manipulation"
+          aria-label="View all orders"
+        >
           <Eye className="h-4 w-4" />
           <span>View All</span>
         </button>

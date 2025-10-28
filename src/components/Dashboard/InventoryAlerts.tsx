@@ -123,7 +123,7 @@ const InventoryAlerts: React.FC<InventoryAlertsProps> = ({ onViewAllAlerts }) =>
               {stats.lowStockItems + stats.outOfStockItems} items need attention
             </span>
             <button 
-              onClick={onViewAllAlerts}
+              onClick={() => onViewAllAlerts?.()}
               className="text-blue-600 hover:text-blue-700 font-medium touch-manipulation text-left sm:text-right"
             >
               View All Alerts

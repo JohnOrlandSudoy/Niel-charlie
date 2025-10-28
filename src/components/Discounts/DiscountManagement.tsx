@@ -4,14 +4,11 @@ import {
   Search, 
   Filter, 
   Edit, 
-  Trash2, 
-  ToggleLeft, 
-  ToggleRight,
+  
   Calendar,
   Percent,
   DollarSign,
   Users,
-  TrendingUp,
   AlertCircle,
   CheckCircle,
   XCircle
@@ -30,9 +27,7 @@ const DiscountManagement: React.FC = React.memo(() => {
     error,
     createDiscount,
     updateDiscount,
-    deleteDiscount,
-    toggleDiscountStatus,
-    refreshDiscounts,
+    // deleteDiscount removed per request
   } = useDiscountManagement();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -76,33 +71,27 @@ const DiscountManagement: React.FC = React.memo(() => {
   }, [discounts, searchQuery, statusFilter]);
 
   // Handle create discount
-  const handleCreateDiscount = async (data: CreateDiscountRequest) => {
+  const handleCreateDiscount = async (data: CreateDiscountRequest): Promise<boolean> => {
     const success = await createDiscount(data);
     if (success) {
       setShowCreateModal(false);
     }
+    return Boolean(success);
   };
 
   // Handle edit discount
-  const handleEditDiscount = async (id: string, data: any) => {
+  const handleEditDiscount = async (id: string, data: any): Promise<boolean> => {
     const success = await updateDiscount(id, data);
     if (success) {
       setShowEditModal(false);
       setSelectedDiscount(null);
     }
+    return Boolean(success);
   };
 
-  // Handle delete discount
-  const handleDeleteDiscount = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this discount? This action cannot be undone.')) {
-      await deleteDiscount(id);
-    }
-  };
+  // Delete functionality removed per request
 
-  // Handle toggle status
-  const handleToggleStatus = async (id: string) => {
-    await toggleDiscountStatus(id);
-  };
+
 
   // Get status badge
   const getStatusBadge = (discount: Discount) => {
@@ -322,17 +311,7 @@ const DiscountManagement: React.FC = React.memo(() => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleToggleStatus(discount.id)}
-                          className="text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                          aria-label={`${discount.is_active ? 'Deactivate' : 'Activate'} discount`}
-                        >
-                          {discount.is_active ? (
-                            <ToggleRight className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <ToggleLeft className="h-5 w-5 text-gray-400" />
-                          )}
-                        </button>
+                        {/* Toggle button removed per request */}
                         <button
                           onClick={() => {
                             setSelectedDiscount(discount);
@@ -343,13 +322,7 @@ const DiscountManagement: React.FC = React.memo(() => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteDiscount(discount.id)}
-                          className="text-red-600 hover:text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
-                          aria-label="Delete discount"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {/* Delete button removed per request */}
                       </div>
                     </td>
                   </tr>

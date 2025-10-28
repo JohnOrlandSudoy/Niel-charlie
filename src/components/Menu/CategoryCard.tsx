@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Edit, Trash2, Eye, EyeOff, Star, Calendar, User } from 'lucide-react';
+import React from 'react';
+import { Edit, Calendar } from 'lucide-react';
 import { MenuCategory } from '../../types/menu';
 
 interface CategoryCardProps {
@@ -15,7 +15,6 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   onDelete, 
   onToggleActive 
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -30,8 +29,6 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
       className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200 ${
         !category.is_active ? 'opacity-60' : ''
       }`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Category Image */}
       <div className="relative h-48 bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -47,16 +44,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
           </div>
         )}
         
-        {/* Status Badge */}
-        <div className="absolute top-3 right-3">
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-            category.is_active 
-              ? 'bg-emerald-100 text-emerald-800' 
-              : 'bg-gray-100 text-gray-600'
-          }`}>
-            {category.is_active ? 'Active' : 'Inactive'}
-          </span>
-        </div>
+        {/* Status Badge removed per design request */}
 
         {/* Sort Order Badge */}
         <div className="absolute top-3 left-3">
@@ -123,16 +111,20 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                 : 'bg-emerald-600 text-white hover:bg-emerald-700'
             }`}
             title={category.is_active ? 'Deactivate' : 'Activate'}
+            aria-label={category.is_active ? 'Deactivate category' : 'Activate category'}
           >
-            {category.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            <span className="text-sm font-medium">
+              {category.is_active ? 'Deactivate' : 'Activate'}
+            </span>
           </button>
           
           <button 
             onClick={() => onDelete(category.id)}
             className="bg-red-600 text-white py-2 px-3 rounded-lg hover:bg-red-700 transition-colors duration-200"
             title="Delete Category"
+            aria-label="Delete category"
           >
-            <Trash2 className="h-4 w-4" />
+            <span className="text-sm font-medium">Delete</span>
           </button>
         </div>
       </div>

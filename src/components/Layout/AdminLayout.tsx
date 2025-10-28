@@ -74,7 +74,7 @@ const AdminLayout: React.FC = () => {
     
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard onNavigateToInventory={() => setCurrentPage('inventory')} />;
+        return <Dashboard onNavigateToInventory={() => setCurrentPage('inventory')} onNavigateToOrders={() => setCurrentPage('orders')} />;
       case 'users':
         console.log('AdminLayout: Rendering UserManagement component');
         console.log('AdminLayout: About to render UserManagement component');
@@ -95,7 +95,7 @@ const AdminLayout: React.FC = () => {
         return <Settings />;
       default:
         console.log('AdminLayout: Default case, rendering Dashboard');
-        return <Dashboard />;
+  return <Dashboard onNavigateToOrders={() => setCurrentPage('orders')} />;
     }
   };
 
