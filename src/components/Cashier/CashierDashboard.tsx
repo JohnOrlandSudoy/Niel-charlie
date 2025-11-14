@@ -188,8 +188,8 @@ const CashierDashboard: React.FC = React.memo(() => {
     // If order has items, calculate from items
     if ((order as any).order_items && (order as any).order_items.length > 0) {
       const subtotal = (order as any).order_items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
-      const tax = subtotal * 0.12; // 12% VAT
-      return subtotal + tax;
+      const vat = subtotal * 0.12; // 12% VAT
+      return subtotal + vat;
     }
     // Otherwise use the order's total_amount
     return order.total_amount || 0;

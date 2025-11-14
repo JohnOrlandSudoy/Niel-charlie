@@ -99,7 +99,7 @@ const PaymentModal: React.FC<PaymentModalProps> = React.memo(({
                 <span className="font-medium">Subtotal:</span> ₱{orderSummary.subtotal}
               </div>
               <div>
-                <span className="font-medium">Tax:</span> ₱{orderSummary.tax}
+                <span className="font-medium">VAT:</span> ₱{orderSummary.tax}
               </div>
               <div className="col-span-2">
                 <span className="font-medium text-lg">Total Amount:</span> 

@@ -147,8 +147,6 @@ export const useDashboardData = () => {
         item.current_stock === 0
       );
 
-      console.log('Inventory data:', { ingredients, lowStockItems, outOfStockItems });
-
       // Process discounts data
       const discounts = discountsResult.success ? discountsResult.data : [];
       const now = new Date();

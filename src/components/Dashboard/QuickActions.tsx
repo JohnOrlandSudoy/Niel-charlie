@@ -1,9 +1,11 @@
 import React from 'react';
 import { Plus, Package, Book as MenuBook, Percent, FileText, Settings, ShoppingCart, BarChart3 } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { useNavigate } from 'react-router-dom';
 
 const QuickActions: React.FC = () => {
   const { stats } = useDashboardData();
+  const navigate = useNavigate();
 
   const actions = [
     {
@@ -64,7 +66,7 @@ const QuickActions: React.FC = () => {
               key={index}
               onClick={() => {
                 // Navigate to the specified route
-                window.location.href = action.href;
+                navigate(action.href);
               }}
               className={`relative p-4 rounded-lg border-2 border-dashed border-${action.color}-200 hover:border-${action.color}-300 hover:bg-${action.color}-50 transition-all duration-200 group`}
             >

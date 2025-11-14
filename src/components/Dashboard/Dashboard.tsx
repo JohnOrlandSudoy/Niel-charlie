@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardData } from '../../hooks/useDashboardData';
@@ -7,6 +7,9 @@ import SalesChart from './SalesChart';
 import RecentOrders from './RecentOrders';
 import InventoryAlerts from './InventoryAlerts';
 import StockUsageChart from './StockUsageChart';
+import BestSellersCard from './BestSellersCard';
+import BestSellersModal from './BestSellersModal';
+import RevenueAnalytics from './RevenueAnalytics';
 
 interface DashboardProps {
   onNavigateToInventory?: () => void;
@@ -16,17 +19,17 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigateToOrders }) => {
   const { user } = useAuth();
   const { lastUpdated, refresh, isLoading, stats } = useDashboardData();
+  const [showBestSellersModal, setShowBestSellersModal] = useState(false);
 
-  const formatLastUpdated = (date: Date) => {
+  const formatLastUpdated = (date?: Date | null) => {
+    if (!date || !(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
     const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
+    let diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    if (diffInMinutes < 0) diffInMinutes = 0; // clamp future dates
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
-    
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
     return date.toLocaleString();
   };
 
@@ -44,12 +47,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
           <div className="text-right">
             <p className="text-xs sm:text-sm text-gray-500">Last updated</p>
             <p className="text-xs sm:text-sm font-medium text-gray-900">
-              {formatLastUpdated(lastUpdated)}
+              {lastUpdated ? formatLastUpdated(lastUpdated) : '—'}
             </p>
           </div>
           <button
             onClick={refresh}
             disabled={isLoading}
+            aria-label="Refresh dashboard data"
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 disabled:opacity-50 touch-manipulation"
             title="Refresh dashboard data"
           >
@@ -63,6 +67,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
       {/* Sales Chart - Full Width */}
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
         <SalesChart />
+      </div>
+
+      {/* Revenue Analytics */}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
+        <RevenueAnalytics />
+      </div>
+
+      {/* Best Sellers Card */}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
+        <BestSellersCard onViewMore={() => setShowBestSellersModal(true)} />
       </div>
 
       {/* Recent Orders and Inventory Alerts */}
@@ -91,7 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
                 <p className="text-xs text-gray-500">All time</p>
               </div>
               <p className="text-lg font-bold text-emerald-600">
-                ₱{stats.totalRevenue.toLocaleString()}
+                ₱{(stats?.totalRevenue ?? 0).toLocaleString()}
               </p>
             </div>
             
@@ -101,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
                 <p className="text-xs text-gray-500">All time</p>
               </div>
               <p className="text-lg font-bold text-blue-600">
-                {stats.completedOrders}
+                {stats?.completedOrders ?? 0}
               </p>
             </div>
             
@@ -111,7 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
                 <p className="text-xs text-gray-500">Currently</p>
               </div>
               <p className="text-lg font-bold text-amber-600">
-                {stats.pendingOrders}
+                {stats?.pendingOrders ?? 0}
               </p>
             </div>
             
@@ -121,12 +135,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
                 <p className="text-xs text-gray-500">Currently</p>
               </div>
               <p className="text-lg font-bold text-purple-600">
-                {stats.activeDiscounts}
+                {stats?.activeDiscounts ?? 0}
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Best Sellers Modal */}
+      <BestSellersModal isOpen={showBestSellersModal} onClose={() => setShowBestSellersModal(false)} />
     </div>
   );
 };

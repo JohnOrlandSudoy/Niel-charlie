@@ -76,7 +76,7 @@ const StockUsageChart: React.FC<StockUsageChartProps> = ({ onViewAllItems }) => 
 
       <div className="space-y-3 sm:space-y-4">
         {sortedAlerts.length > 0 ? sortedAlerts.slice(0, 5).map((item) => {
-          const usagePercentage = getStockUsagePercentage(item.current_stock, item.minimum_stock);
+          const usagePercentage = getStockUsagePercentage(item.current_stock, item.min_stock_threshold);
           const isOutOfStock = item.current_stock === 0;
           
           return (
@@ -91,7 +91,7 @@ const StockUsageChart: React.FC<StockUsageChartProps> = ({ onViewAllItems }) => 
                     {item.current_stock} {item.unit}
                   </span>
                   <span className="text-xs text-gray-500 ml-1">
-                    (min: {item.minimum_stock})
+                    (min: {item.min_stock_threshold})
                   </span>
                 </div>
               </div>

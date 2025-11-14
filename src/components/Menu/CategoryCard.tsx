@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit, Calendar } from 'lucide-react';
+import { Edit, Trash2, Calendar } from 'lucide-react';
 import { MenuCategory } from '../../types/menu';
 
 interface CategoryCardProps {
@@ -122,9 +122,8 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
             onClick={() => onDelete(category.id)}
             className="bg-red-600 text-white py-2 px-3 rounded-lg hover:bg-red-700 transition-colors duration-200"
             title="Delete Category"
-            aria-label="Delete category"
           >
-            <span className="text-sm font-medium">Delete</span>
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </div>

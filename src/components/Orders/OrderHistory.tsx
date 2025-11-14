@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle, Package } from 'lucide-react';
+import { Search, Filter, Download, Printer, AlertTriangle, Loader2, Trash2, X, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Order as ApiOrder, PaginatedOrderResponse } from '../../types/orders';
 import * as XLSX from 'xlsx';
@@ -1374,9 +1374,6 @@ const OrderHistory: React.FC = () => {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-1">
-                          <button className="text-blue-600 hover:text-blue-700 p-1 rounded" title="View Details">
-                            <Eye className="h-4 w-4" />
-                          </button>
                           <button 
                             onClick={() => handlePrintOrder(order)}
                             className="text-gray-600 hover:text-gray-700 p-1 rounded" 
@@ -1469,9 +1466,6 @@ const OrderHistory: React.FC = () => {
                       </div>
                       
                       <div className="flex items-center space-x-1 ml-4">
-                        <button className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" title="View Details">
-                          <Eye className="h-4 w-4" />
-                        </button>
                         <button 
                           onClick={() => handlePrintOrder(order)}
                           className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 
@@ -1572,9 +1566,6 @@ const OrderHistory: React.FC = () => {
                         
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <button className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50" title="View Details">
-                              <Eye className="h-4 w-4" />
-                            </button>
                             <button 
                               onClick={() => handlePrintOrder(order)}
                               className="text-gray-600 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-50" 

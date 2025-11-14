@@ -223,7 +223,7 @@ const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
         <div class="totals">
           <p><strong>Subtotal:</strong> ${formatCurrency(receiptData.order.subtotal)}</p>
           <p><strong>Discount:</strong> -${formatCurrency(receiptData.order.discount)}</p>
-          <p><strong>Tax:</strong> ${formatCurrency(receiptData.order.tax)}</p>
+          <p><strong>VAT:</strong> ${formatCurrency(receiptData.order.tax)}</p>
           <p><strong>Total:</strong> ${formatCurrency(receiptData.order.total)}</p>
         </div>
 

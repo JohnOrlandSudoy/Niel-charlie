@@ -1,13 +1,19 @@
 // API utility functions for making authenticated requests
 import { offlineApiManager } from './offlineApiManager';
 import { config } from './config';
+import { WasteReportFilters, WasteReportPayload, WasteReportUpdatePayload } from '../types/kitchen';
 
-// Force the correct API URL to override any cached configuration
-const API_BASE_URL = 'https://server-resturant-3.onrender.com/api';
-console.log('API_BASE_URL configured as:', API_BASE_URL);
-console.log('Config object:', config);
-console.log('Config API baseUrl:', config.api.baseUrl);
-console.log('Using hardcoded API_BASE_URL to override config');
+// Resolve API base URL for dev/prod
+const API_BASE_URL = (
+  // Prefer localhost in development to avoid hitting production accidentally
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+    ? 'http://localhost:3000/api'
+    : (
+        (typeof config?.api?.baseUrl === 'string' && config.api.baseUrl)
+        || 'https://server-resturant-3.onrender.com/api'
+      )
+);
+console.log('API_BASE_URL:', API_BASE_URL);
 
 // Get auth token from localStorage
 export const getAuthToken = (): string | null => {
@@ -64,7 +70,14 @@ export const directApiRequest = async (
     },
   };
 
-  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  // Build full URL robustly to avoid accidental duplicate '/api' segments.
+  const baseClean = API_BASE_URL.replace(/\/$/, ''); // remove trailing slash
+  let epClean = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  // If base ends with '/api' and endpoint also starts with 'api/', remove the duplicate
+  if (baseClean.endsWith('/api') && epClean.startsWith('api/')) {
+    epClean = epClean.replace(/^api\//, '');
+  }
+  const fullUrl = `${baseClean}/${epClean}`;
   console.log('Making API request to:', fullUrl);
   console.log('Request timestamp:', new Date().toISOString());
   console.log('Request headers:', config.headers);
@@ -129,7 +142,46 @@ export const directApiRequest = async (
     }
   }
 
+  // Protect callers from attempting to parse HTML/error pages as JSON.
+  // If the response is not JSON, read a short snippet of the body and throw
+  // a descriptive error. This prevents the generic "Unexpected token '<'"
+  // error when the backend returns an HTML error page (e.g., 404 index.html).
+  try {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      const snippet = text ? text.slice(0, 1024) : '<no body>';
+      console.error('Non-JSON response received from', fullUrl, 'status', response.status, 'snippet:', snippet);
+      throw new Error(
+        `Expected JSON response but received '${contentType || 'unknown'}' (status ${response.status}). Server response snippet: ${snippet.slice(0,200)}`
+      );
+    }
+  } catch (err) {
+    // If reading the body fails for any reason, throw a helpful error
+    console.error('Error while validating response content-type for', fullUrl, err);
+    throw err;
+  }
+
   return response;
+};
+
+// Helper to safely parse JSON responses and throw a descriptive error
+// when the server returns non-JSON (e.g., an HTML error page).
+export const parseJsonResponse = async <T = any>(response: Response): Promise<T> => {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    const snippet = text ? text.slice(0, 1024) : '<no body>';
+    throw new Error(
+      `Expected JSON response but received '${contentType || 'unknown'}' (status ${response.status}). Server response snippet: ${snippet.slice(0,200)}`
+    );
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch (err) {
+    throw new Error(`Failed to parse JSON response: ${err instanceof Error ? err.message : String(err)}`);
+  }
 };
 
 // API endpoints
@@ -686,5 +738,93 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ discount_code: discountCode }),
       }),
+  },
+
+  kitchen: {
+    submitWasteReport: (payload: WasteReportPayload) =>
+      apiRequest('/kitchen/waste-reports', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    getWasteReports: (filters?: WasteReportFilters) => {
+      const queryParams = new URLSearchParams();
+      if (filters?.page) queryParams.append('page', filters.page.toString());
+      if (filters?.limit) queryParams.append('limit', filters.limit.toString());
+      if (filters?.status && filters.status !== 'all') queryParams.append('status', filters.status);
+      if (filters?.reason && filters.reason !== 'all') queryParams.append('reason', filters.reason);
+      if (filters?.startDate) queryParams.append('start_date', filters.startDate);
+      if (filters?.endDate) queryParams.append('end_date', filters.endDate);
+
+      const queryString = queryParams.toString();
+      const endpoint = queryString ? `/kitchen/waste-reports?${queryString}` : '/kitchen/waste-reports';
+      return apiRequest(endpoint);
+    },
+
+    updateWasteReport: (wasteReportId: string, payload: WasteReportUpdatePayload) =>
+      apiRequest(`/kitchen/waste-reports/${wasteReportId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
+
+    getWasteAnalytics: (params: { startDate: string; endDate: string }) => {
+      const queryParams = new URLSearchParams();
+      if (params.startDate) queryParams.append('startDate', params.startDate);
+      if (params.endDate) queryParams.append('endDate', params.endDate);
+
+      return apiRequest(`/kitchen/waste-reports/analytics?${queryParams.toString()}`);
+    },
+  },
+
+  // Sales Analytics Endpoints
+  sales: {
+    // Get best sellers for current week
+    getBestSellers: (limit: number = 10, offset: number = 0) => {
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: offset.toString(),
+      });
+      return apiRequest(`/admin/sales/best-sellers?${params.toString()}`);
+    },
+
+    // Get best sellers for specific week/year
+    getBestSellersByWeek: (week: number, year: number, limit: number = 10, offset: number = 0) => {
+      const params = new URLSearchParams({
+        week: week.toString(),
+        year: year.toString(),
+        limit: limit.toString(),
+        offset: offset.toString(),
+      });
+      return apiRequest(`/admin/sales/best-sellers/week?${params.toString()}`);
+    },
+
+    // Get paginated sales records
+    getSalesRecords: (page: number = 1, limit: number = 50, filters?: {
+      menu_item_id?: string;
+      start_date?: string;
+      end_date?: string;
+      sort_by?: string;
+      sort_order?: string;
+    }) => {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (filters?.menu_item_id) params.append('menu_item_id', filters.menu_item_id);
+      if (filters?.start_date) params.append('start_date', filters.start_date);
+      if (filters?.end_date) params.append('end_date', filters.end_date);
+      if (filters?.sort_by) params.append('sort_by', filters.sort_by);
+      if (filters?.sort_order) params.append('sort_order', filters.sort_order);
+
+      return apiRequest(`/admin/sales/records?${params.toString()}`);
+    },
+
+    // Get sales summary KPIs
+    getSalesSummary: (timeframe: string = 'week') => {
+      const params = new URLSearchParams({
+        timeframe,
+      });
+      return apiRequest(`/admin/sales/summary?${params.toString()}`);
+    },
   },
 };

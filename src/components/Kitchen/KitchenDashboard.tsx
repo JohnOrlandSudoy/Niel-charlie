@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   ChefHat, 
@@ -13,19 +13,30 @@ import {
   X,
   AlertCircle,
   Loader2,
-  History
+  History,
+  Trash2,
+  PlusCircle,
+  Filter,
+  BarChart3,
+  ShieldCheck
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { 
   KitchenOrder, 
   OrderStatusHistory, 
   KitchenStats, 
-  ApiResponse 
+  ApiResponse,
+  WasteReport,
+  WasteReportFilters,
+  WasteReportPayload,
+  WasteReportUpdatePayload,
+  WasteAnalytics
 } from '../../types/kitchen';
 
 
 
 interface Ingredient {
+  id?: string;
   name: string;
   currentStock: number;
   minStock: number;
@@ -74,6 +85,29 @@ const getStockStatusColor = (status: string) => {
   }
 };
 
+const WASTE_REASON_OPTIONS = [
+  { value: 'spoilage', label: 'Spoilage' },
+  { value: 'overproduction', label: 'Overproduction' },
+  { value: 'prep_error', label: 'Preparation Error' },
+  { value: 'contamination', label: 'Contamination' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'other', label: 'Other' }
+];
+
+const getWasteStatusColor = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'bg-amber-100 text-amber-800 border border-amber-200';
+    case 'approved':
+    case 'resolved':
+      return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+    case 'rejected':
+      return 'bg-rose-100 text-rose-700 border border-rose-200';
+    default:
+      return 'bg-gray-100 text-gray-700 border border-gray-200';
+  }
+};
+
 const KitchenDashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('orders');
@@ -97,6 +131,26 @@ const KitchenDashboard: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const notificationTimeouts = useRef<number[]>([]);
+  const [wasteReports, setWasteReports] = useState<WasteReport[]>([]);
+  const [isLoadingWasteReports, setIsLoadingWasteReports] = useState(false);
+  const [wasteFilters, setWasteFilters] = useState<{
+    status: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+  }>({
+    status: 'all',
+    reason: 'all',
+    startDate: '',
+    endDate: ''
+  });
+  const [wasteError, setWasteError] = useState<string | null>(null);
+  const [isWasteFormOpen, setIsWasteFormOpen] = useState(false);
+  const [isSubmittingWasteReport, setIsSubmittingWasteReport] = useState(false);
+  const [wasteAnalytics, setWasteAnalytics] = useState<WasteAnalytics | null>(null);
+  const [isLoadingWasteAnalytics, setIsLoadingWasteAnalytics] = useState(false);
+  const [updatingWasteReportId, setUpdatingWasteReportId] = useState<string | null>(null);
 
   // Fetch kitchen orders from API - Memoized for performance
   const fetchKitchenOrders = useCallback(async () => {
@@ -276,6 +330,7 @@ const KitchenDashboard: React.FC = () => {
       if (result.success && result.data) {
         // Convert API data to our ingredient format
         const inventoryIngredients: Ingredient[] = result.data.map(item => ({
+          id: item.id,
           name: item.name,
           currentStock: item.current_stock || 0,
           minStock: item.min_stock_threshold || 0,
@@ -295,17 +350,17 @@ const KitchenDashboard: React.FC = () => {
       console.error('Error fetching inventory data:', err);
       // Fallback to mock data if API fails
       const mockIngredients: Ingredient[] = [
-        { name: 'chicken', currentStock: 15, minStock: 10, unit: 'kg', status: 'sufficient' },
-        { name: 'pork', currentStock: 8, minStock: 10, unit: 'kg', status: 'low' },
-        { name: 'beef', currentStock: 12, minStock: 10, unit: 'kg', status: 'sufficient' },
-        { name: 'rice', currentStock: 25, minStock: 15, unit: 'kg', status: 'sufficient' },
-        { name: 'soy sauce', currentStock: 3, minStock: 5, unit: 'L', status: 'low' },
-        { name: 'pepper', currentStock: 0, minStock: 2, unit: 'kg', status: 'out' },
-        { name: 'garlic', currentStock: 2, minStock: 3, unit: 'kg', status: 'low' },
-        { name: 'vinegar', currentStock: 4, minStock: 3, unit: 'L', status: 'sufficient' },
-        { name: 'oil', currentStock: 6, minStock: 5, unit: 'L', status: 'sufficient' },
-        { name: 'tea leaves', currentStock: 1, minStock: 2, unit: 'kg', status: 'low' },
-        { name: 'sugar', currentStock: 8, minStock: 5, unit: 'kg', status: 'sufficient' }
+        { id: 'mock-chicken', name: 'chicken', currentStock: 15, minStock: 10, unit: 'kg', status: 'sufficient' },
+        { id: 'mock-pork', name: 'pork', currentStock: 8, minStock: 10, unit: 'kg', status: 'low' },
+        { id: 'mock-beef', name: 'beef', currentStock: 12, minStock: 10, unit: 'kg', status: 'sufficient' },
+        { id: 'mock-rice', name: 'rice', currentStock: 25, minStock: 15, unit: 'kg', status: 'sufficient' },
+        { id: 'mock-soy-sauce', name: 'soy sauce', currentStock: 3, minStock: 5, unit: 'L', status: 'low' },
+        { id: 'mock-pepper', name: 'pepper', currentStock: 0, minStock: 2, unit: 'kg', status: 'out' },
+        { id: 'mock-garlic', name: 'garlic', currentStock: 2, minStock: 3, unit: 'kg', status: 'low' },
+        { id: 'mock-vinegar', name: 'vinegar', currentStock: 4, minStock: 3, unit: 'L', status: 'sufficient' },
+        { id: 'mock-oil', name: 'oil', currentStock: 6, minStock: 5, unit: 'L', status: 'sufficient' },
+        { id: 'mock-tea-leaves', name: 'tea leaves', currentStock: 1, minStock: 2, unit: 'kg', status: 'low' },
+        { id: 'mock-sugar', name: 'sugar', currentStock: 8, minStock: 5, unit: 'kg', status: 'sufficient' }
       ];
       setIngredients(mockIngredients);
       
@@ -315,6 +370,189 @@ const KitchenDashboard: React.FC = () => {
       }
     }
   }, []);
+
+  const fetchWasteReports = useCallback(async () => {
+    try {
+      setIsLoadingWasteReports(true);
+      setWasteError(null);
+
+      const filters: WasteReportFilters = {
+        page: 1,
+        limit: 20,
+        status: wasteFilters.status,
+        reason: wasteFilters.reason,
+        startDate: wasteFilters.startDate || undefined,
+        endDate: wasteFilters.endDate || undefined
+      };
+
+      const response = await api.kitchen.getWasteReports(filters);
+      const result: ApiResponse<WasteReport[]> = await response.json();
+
+      if (result.success) {
+        const reports = Array.isArray(result.data) ? result.data : [];
+        setWasteReports(reports);
+      } else {
+        setWasteError(result.message || 'Failed to fetch waste reports');
+      }
+    } catch (err) {
+      console.error('Error fetching waste reports:', err);
+      setWasteError('Failed to fetch waste reports. Please try again.');
+    } finally {
+      setIsLoadingWasteReports(false);
+    }
+  }, [wasteFilters]);
+
+  const fetchWasteAnalytics = useCallback(async () => {
+    if (!wasteFilters.startDate || !wasteFilters.endDate) {
+      setWasteAnalytics(null);
+      return;
+    }
+
+    try {
+      setIsLoadingWasteAnalytics(true);
+      const response = await api.kitchen.getWasteAnalytics({
+        startDate: wasteFilters.startDate,
+        endDate: wasteFilters.endDate
+      });
+      const result: ApiResponse<WasteAnalytics> = await response.json();
+
+      if (result.success && result.data) {
+        setWasteAnalytics(result.data);
+      } else {
+        setWasteAnalytics(null);
+      }
+    } catch (err) {
+      console.error('Error fetching waste analytics:', err);
+      setWasteAnalytics(null);
+    } finally {
+      setIsLoadingWasteAnalytics(false);
+    }
+  }, [wasteFilters.startDate, wasteFilters.endDate]);
+
+  const handleWasteFiltersChange = useCallback((updates: Partial<typeof wasteFilters>) => {
+    setWasteFilters((prev) => ({
+      ...prev,
+      ...updates,
+    }));
+  }, []);
+
+  const resetWasteFilters = useCallback(() => {
+    setWasteFilters({
+      status: 'all',
+      reason: 'all',
+      startDate: '',
+      endDate: ''
+    });
+  }, []);
+
+  useEffect(() => {
+    setWasteFilters(prev => {
+      if (prev.startDate && prev.endDate) {
+        return prev;
+      }
+
+      const today = new Date();
+      const endDate = today.toISOString().split('T')[0];
+      const start = new Date(today);
+      start.setDate(start.getDate() - 30);
+      const startDate = start.toISOString().split('T')[0];
+
+      return {
+        ...prev,
+        startDate,
+        endDate,
+      };
+    });
+  }, []);
+
+  const addNotification = useCallback((message: string) => {
+    setNotifications(prev => [...prev, message]);
+    const timeoutId = window.setTimeout(() => {
+      setNotifications(prev => prev.slice(1));
+      notificationTimeouts.current = notificationTimeouts.current.filter((id) => id !== timeoutId);
+    }, 5000);
+    notificationTimeouts.current.push(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      notificationTimeouts.current.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      notificationTimeouts.current = [];
+    };
+  }, []);
+
+  const handleWasteReportSubmit = useCallback(
+    async (payload: WasteReportPayload) => {
+      try {
+        setIsSubmittingWasteReport(true);
+        setWasteError(null);
+
+        const response = await api.kitchen.submitWasteReport(payload);
+        const result: ApiResponse<WasteReport> = await response.json();
+
+        if (result.success && result.data) {
+          addNotification('Waste report submitted successfully.');
+          setIsWasteFormOpen(false);
+          await fetchWasteReports();
+          return { success: true, data: result.data };
+        }
+
+        const message = result.message || 'Failed to submit waste report';
+        setWasteError(message);
+        return { success: false, message };
+      } catch (err) {
+        console.error('Error submitting waste report:', err);
+        const message = err instanceof Error ? err.message : 'Failed to submit waste report. Please try again.';
+        setWasteError(message);
+        return { success: false, message };
+      } finally {
+        setIsSubmittingWasteReport(false);
+      }
+    },
+    [fetchWasteReports, addNotification]
+  );
+
+  const handleWasteReportStatusUpdate = useCallback(
+    async (wasteReportId: string, updates: WasteReportUpdatePayload) => {
+      try {
+        setUpdatingWasteReportId(wasteReportId);
+        setWasteError(null);
+        const response = await api.kitchen.updateWasteReport(wasteReportId, updates);
+        const result: ApiResponse<WasteReport> = await response.json();
+
+        if (result.success && result.data) {
+          setWasteReports(prev =>
+            prev.map(report => (report.id === wasteReportId ? result.data! : report))
+          );
+          if (updates.status === 'resolved') {
+            addNotification('Waste report marked as resolved.');
+          } else {
+            addNotification('Waste report updated.');
+          }
+          await fetchWasteReports();
+          if (wasteFilters.startDate && wasteFilters.endDate) {
+            fetchWasteAnalytics();
+          }
+          return { success: true };
+        }
+
+        const message = result.message || 'Failed to update waste report';
+        setWasteError(message);
+        return { success: false, message };
+      } catch (err) {
+        console.error('Error updating waste report:', err);
+        const message = err instanceof Error ? err.message : 'Failed to update waste report. Please try again.';
+        setWasteError(message);
+        return { success: false, message };
+      }
+      finally {
+        setUpdatingWasteReportId(null);
+      }
+    },
+    [addNotification, fetchWasteAnalytics, fetchWasteReports, wasteFilters.endDate, wasteFilters.startDate]
+  );
 
 
   useEffect(() => {
@@ -332,6 +570,8 @@ const KitchenDashboard: React.FC = () => {
     const interval = setInterval(() => {
       fetchKitchenOrders();
       fetchInventoryData();
+      fetchWasteReports();
+      fetchWasteAnalytics();
     }, 30000);
     
     // Add keyboard shortcuts
@@ -359,6 +599,10 @@ const KitchenDashboard: React.FC = () => {
           break;
         case '3':
           event.preventDefault();
+          setActiveTab('waste');
+          break;
+        case '4':
+          event.preventDefault();
           setActiveTab('equipment');
           break;
       }
@@ -370,17 +614,14 @@ const KitchenDashboard: React.FC = () => {
       clearInterval(interval);
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [fetchKitchenOrders, fetchInventoryData]);
+  }, [fetchKitchenOrders, fetchInventoryData, fetchWasteReports, fetchWasteAnalytics]);
+
+  useEffect(() => {
+    fetchWasteReports();
+    fetchWasteAnalytics();
+  }, [fetchWasteReports, fetchWasteAnalytics]);
 
 
-  // Add notification
-  const addNotification = (message: string) => {
-    setNotifications(prev => [...prev, message]);
-    // Auto-remove notification after 5 seconds
-    setTimeout(() => {
-      setNotifications(prev => prev.slice(1));
-    }, 5000);
-  };
 
   // Update order status via API
   const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled', notes?: string) => {
@@ -570,7 +811,7 @@ const KitchenDashboard: React.FC = () => {
               {/* Keyboard Shortcuts Help */}
               <div className="hidden sm:flex items-center space-x-4 mt-2 text-xs text-gray-500">
                 <span>Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">R</kbd> to refresh</span>
-                <span>Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">1-3</kbd> for tabs</span>
+                <span>Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">1-4</kbd> for tabs</span>
               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
@@ -628,9 +869,18 @@ const KitchenDashboard: React.FC = () => {
               {[
                 { id: 'orders', label: 'Active Orders', icon: ChefHat },
                 { id: 'inventory', label: 'Stock Levels', icon: Package },
+                { id: 'waste', label: 'Waste Reports', icon: Trash2 },
                 { id: 'equipment', label: 'Equipment Status', icon: Thermometer }
               ].map((tab) => {
                 const Icon = tab.icon;
+                const shortcutMap: Record<string, string> = {
+                  orders: '1',
+                  inventory: '2',
+                  waste: '3',
+                  equipment: '4',
+                };
+                const shortcut = shortcutMap[tab.id] || '';
+
                 return (
                   <button
                     key={tab.id}
@@ -640,8 +890,8 @@ const KitchenDashboard: React.FC = () => {
                         ? 'border-blue-500 text-blue-600 bg-blue-50'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                     }`}
-                    aria-label={`Switch to ${tab.label} tab (${tab.id === 'orders' ? '1' : tab.id === 'inventory' ? '2' : '3'})`}
-                    title={`${tab.label} (${tab.id === 'orders' ? '1' : tab.id === 'inventory' ? '2' : '3'})`}
+                    aria-label={`Switch to ${tab.label} tab${shortcut ? ` (${shortcut})` : ''}`}
+                    title={`${tab.label}${shortcut ? ` (${shortcut})` : ''}`}
                   >
                     <Icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                     <span className="hidden sm:inline">{tab.label}</span>
@@ -776,6 +1026,23 @@ const KitchenDashboard: React.FC = () => {
             </div>
           )}
 
+          {activeTab === 'waste' && (
+            <WasteReportsTab
+              wasteReports={wasteReports}
+              isLoading={isLoadingWasteReports}
+              filters={wasteFilters}
+              onFilterChange={handleWasteFiltersChange}
+              onResetFilters={resetWasteFilters}
+              onRefresh={fetchWasteReports}
+              onCreateReport={() => setIsWasteFormOpen(true)}
+              onResolveReport={(id) => handleWasteReportStatusUpdate(id, { status: 'resolved' })}
+              updatingReportId={updatingWasteReportId}
+              analytics={wasteAnalytics}
+              isLoadingAnalytics={isLoadingWasteAnalytics}
+              error={wasteError}
+            />
+          )}
+
           {activeTab === 'equipment' && (
             <div className="text-center py-8 sm:py-12">
               <Thermometer className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
@@ -807,6 +1074,17 @@ const KitchenDashboard: React.FC = () => {
             setShowHistoryModal(false);
             setOrderHistory([]);
           }}
+        />
+      )}
+
+      {isWasteFormOpen && (
+        <WasteReportFormModal
+          ingredients={ingredients}
+          orders={orders}
+          onClose={() => setIsWasteFormOpen(false)}
+          onSubmit={handleWasteReportSubmit}
+          isSubmitting={isSubmittingWasteReport}
+          reasons={WASTE_REASON_OPTIONS}
         />
       )}
     </div>
@@ -1340,6 +1618,639 @@ const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+interface WasteReportsTabProps {
+  wasteReports: WasteReport[];
+  isLoading: boolean;
+  filters: {
+    status: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+  };
+  onFilterChange: (updates: Partial<WasteReportsTabProps['filters']>) => void;
+  onResetFilters: () => void;
+  onRefresh: () => void;
+  onCreateReport: () => void;
+  onResolveReport: (id: string) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
+  updatingReportId: string | null;
+  analytics: WasteAnalytics | null;
+  isLoadingAnalytics: boolean;
+  error?: string | null;
+}
+
+const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
+  wasteReports,
+  isLoading,
+  filters,
+  onFilterChange,
+  onResetFilters,
+  onRefresh,
+  onCreateReport,
+  onResolveReport,
+  updatingReportId,
+  analytics,
+  isLoadingAnalytics,
+  error
+}) => {
+  const hasActiveFilters = useMemo(
+    () =>
+      filters.status !== 'all' ||
+      filters.reason !== 'all' ||
+      Boolean(filters.startDate) ||
+      Boolean(filters.endDate),
+    [filters]
+  );
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Waste Reports</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Track and manage kitchen waste incidents to reduce losses over time.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={onRefresh}
+            className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 touch-manipulation min-h-[40px]"
+            aria-label="Refresh waste reports"
+          >
+            <Clock className="h-4 w-4" />
+            <span>Refresh</span>
+          </button>
+          <button
+            onClick={onCreateReport}
+            className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 touch-manipulation min-h-[40px]"
+            aria-label="Create waste report"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>New Waste Report</span>
+          </button>
+        </div>
+      </div>
+
+      {filters.startDate && filters.endDate && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <BarChart3 className="h-4 w-4 text-blue-600" />
+              <span>Analytics ({filters.startDate} → {filters.endDate})</span>
+            </div>
+            {isLoadingAnalytics && (
+              <Loader2 className="h-4 w-4 animate-spin text-blue-500" aria-label="Loading analytics" />
+            )}
+          </div>
+
+          {analytics ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Total Reports</p>
+                <p className="text-xl font-semibold text-gray-900 mt-1">{analytics.totalReports}</p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Total Quantity</p>
+                <p className="text-xl font-semibold text-gray-900 mt-1">{analytics.totalQuantity}</p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Cost Impact</p>
+                <p className="text-xl font-semibold text-rose-600 mt-1">₱{analytics.totalCostImpact.toFixed(2)}</p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Top Reason</p>
+                <p className="text-sm font-semibold text-gray-900 mt-1">
+                  {analytics.byReason.length > 0 ? analytics.byReason[0].reason.replace('_', ' ') : '—'}
+                </p>
+                {analytics.byReason.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {analytics.byReason[0].count} report(s) • ₱{analytics.byReason[0].costImpact.toFixed(2)}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              {isLoadingAnalytics ? 'Loading analytics…' : 'No analytics available for the selected date range.'}
+            </p>
+          )}
+
+          {analytics && analytics.byReason.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left text-xs sm:text-sm text-gray-600">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="py-2 pr-4 font-semibold text-gray-700">Reason</th>
+                    <th className="py-2 pr-4 font-semibold text-gray-700">Reports</th>
+                    <th className="py-2 pr-4 font-semibold text-gray-700">Quantity</th>
+                    <th className="py-2 pr-4 font-semibold text-gray-700">Cost Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.byReason.map((reason) => (
+                    <tr key={reason.reason} className="border-b border-gray-100 last:border-b-0">
+                      <td className="py-2 pr-4 capitalize">{reason.reason.replace('_', ' ')}</td>
+                      <td className="py-2 pr-4">{reason.count}</td>
+                      <td className="py-2 pr-4">{reason.quantity}</td>
+                      <td className="py-2 pr-4">₱{reason.costImpact.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 sm:p-5">
+        <div className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-3">
+          <Filter className="h-4 w-4" />
+          <span>Filters</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div>
+            <label htmlFor="waste-reason" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              Reason
+            </label>
+            <select
+              id="waste-reason"
+              value={filters.reason}
+              onChange={(event) => onFilterChange({ reason: event.target.value })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All reasons</option>
+              {WASTE_REASON_OPTIONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>
+                  {reason.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="waste-status" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <select
+              id="waste-status"
+              value={filters.status}
+              onChange={(event) => onFilterChange({ status: event.target.value })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="resolved">Resolved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="waste-start-date" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              From date
+            </label>
+            <input
+              id="waste-start-date"
+              type="date"
+              value={filters.startDate}
+              onChange={(event) => onFilterChange({ startDate: event.target.value })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="waste-end-date" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              To date
+            </label>
+            <input
+              id="waste-end-date"
+              type="date"
+              value={filters.endDate}
+              onChange={(event) => onFilterChange({ endDate: event.target.value })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        {hasActiveFilters && (
+          <div className="mt-3">
+            <button
+              onClick={onResetFilters}
+              className="text-xs sm:text-sm font-medium text-blue-600 hover:text-blue-700"
+              aria-label="Reset waste report filters"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      <div className="space-y-3 sm:space-y-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            <span className="ml-2 text-sm text-gray-600">Loading waste reports...</span>
+          </div>
+        ) : wasteReports.length > 0 ? (
+          wasteReports.map((report) => {
+            const reasonLabel =
+              WASTE_REASON_OPTIONS.find((option) => option.value === report.reason)?.label ||
+              report.reason.replace('_', ' ');
+            return (
+              <div
+                key={report.id}
+                className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow duration-200"
+              >
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-rose-50 border border-rose-100">
+                    <Trash2 className="h-4 w-4 text-rose-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm sm:text-base font-semibold text-gray-900">
+                      {report.ingredient?.name || 'Unknown ingredient'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Reported on {new Date(report.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getWasteStatusColor(report.status)}`}>
+                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-600">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Quantity</p>
+                  <p className="font-medium">
+                    {report.quantity} {report.unit}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Reason</p>
+                  <p className="font-medium">{reasonLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Cost impact</p>
+                  <p className="font-medium text-rose-600">₱{report.cost_impact?.toFixed(2) ?? '0.00'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Reported by</p>
+                  <p className="font-medium">
+                    {report.reported_by_user
+                      ? `${report.reported_by_user.first_name ?? ''} ${report.reported_by_user.last_name ?? ''}`.trim() ||
+                        report.reported_by_user.username
+                      : 'Unknown'}
+                  </p>
+                </div>
+              </div>
+              {report.notes && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                  <p className="font-medium">Notes</p>
+                  <p className="mt-1 whitespace-pre-wrap">{report.notes}</p>
+                </div>
+              )}
+              {report.photo_url && (
+                <div className="mt-3 text-sm">
+                  <a
+                    href={report.photo_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View attached photo
+                  </a>
+                </div>
+              )}
+              {report.order?.order_number && (
+                <div className="mt-3 text-xs text-gray-500">
+                  Linked order: <span className="font-medium text-gray-700">{report.order.order_number}</span>
+                </div>
+              )}
+              <div className="mt-4 flex flex-col sm:flex-row sm:justify-end gap-2">
+                {report.status !== 'resolved' && (
+                  <button
+                    onClick={async () => {
+                      await onResolveReport(report.id);
+                    }}
+                    disabled={updatingReportId === report.id}
+                    className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 touch-manipulation min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>{updatingReportId === report.id ? 'Resolving…' : 'Mark Resolved'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-10 bg-white border border-dashed border-gray-300 rounded-xl">
+            <Trash2 className="h-8 w-8 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500">No waste reports recorded for the current filters.</p>
+            <p className="text-xs text-gray-400 mt-1">Create a new report whenever spoilage or spillage occurs.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface WasteReportFormModalProps {
+  ingredients: Ingredient[];
+  orders: KitchenOrder[];
+  onClose: () => void;
+  onSubmit: (payload: WasteReportPayload) => Promise<{ success: boolean; message?: string }>;
+  isSubmitting: boolean;
+  reasons: { value: string; label: string }[];
+}
+
+const WasteReportFormModal: React.FC<WasteReportFormModalProps> = ({
+  ingredients,
+  orders,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  reasons
+}) => {
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formState, setFormState] = useState({
+    ingredientId: '',
+    quantity: '',
+    unit: '',
+    reason: reasons.length > 0 ? reasons[0].value : 'spoilage',
+    orderId: '',
+    notes: '',
+    photoUrl: ''
+  });
+
+  const ingredientOptions = useMemo(
+    () =>
+      ingredients.map((ingredient) => ({
+        value: ingredient.id || ingredient.name,
+        label: ingredient.name.toUpperCase(),
+        unit: ingredient.unit,
+        currentStock: ingredient.currentStock,
+      })),
+    [ingredients]
+  );
+
+  const selectedIngredient = useMemo(
+    () => ingredients.find((ingredient) => (ingredient.id || ingredient.name) === formState.ingredientId) ?? null,
+    [ingredients, formState.ingredientId]
+  );
+
+  useEffect(() => {
+    if (selectedIngredient && selectedIngredient.unit && !formState.unit) {
+      setFormState((prev) => ({
+        ...prev,
+        unit: selectedIngredient.unit || prev.unit,
+      }));
+    }
+  }, [selectedIngredient, formState.unit]);
+
+  const handleInputChange = (field: keyof typeof formState, value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setFormError(null);
+  };
+
+  const handleIngredientChange = (value: string) => {
+    const ingredient = ingredientOptions.find((option) => option.value === value);
+    setFormState((prev) => ({
+      ...prev,
+      ingredientId: value,
+      unit: ingredient?.unit || prev.unit || '',
+    }));
+    setFormError(null);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+
+    if (!formState.ingredientId) {
+      setFormError('Please select an ingredient to report waste for.');
+      return;
+    }
+
+    const quantityValue = Number(formState.quantity);
+
+    if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
+      setFormError('Quantity must be a positive number.');
+      return;
+    }
+
+    const unitValue = formState.unit || selectedIngredient?.unit || '';
+
+    if (!unitValue) {
+      setFormError('Unit is required. Please confirm the ingredient details.');
+      return;
+    }
+
+    const payload: WasteReportPayload = {
+      ingredientId: formState.ingredientId,
+      quantity: quantityValue,
+      unit: unitValue,
+      reason: formState.reason,
+      orderId: formState.orderId || undefined,
+      notes: formState.notes || undefined,
+      photoUrl: formState.photoUrl || undefined,
+    };
+
+    const result = await onSubmit(payload);
+    if (!result.success) {
+      setFormError(result.message || 'Failed to submit waste report. Please try again.');
+      return;
+    }
+
+    setFormState({
+      ingredientId: '',
+      quantity: '',
+      unit: '',
+      reason: reasons.length > 0 ? reasons[0].value : 'spoilage',
+      orderId: '',
+      notes: '',
+      photoUrl: ''
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[95vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">New Waste Report</h2>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">
+              Log spoilage, spillage, or prep errors to keep costs under control.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Close waste report form"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <div>
+            <label htmlFor="waste-ingredient" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Ingredient *
+            </label>
+            <select
+              id="waste-ingredient"
+              value={formState.ingredientId}
+              onChange={(event) => handleIngredientChange(event.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select ingredient</option>
+              {ingredientOptions.map((ingredient) => (
+                <option key={ingredient.value} value={ingredient.value}>
+                  {ingredient.label} {ingredient.currentStock !== undefined ? `(Stock: ${ingredient.currentStock})` : ''}
+                </option>
+              ))}
+            </select>
+            {selectedIngredient && (
+              <div className="mt-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                Current stock: {selectedIngredient.currentStock} {selectedIngredient.unit} | Minimum:{' '}
+                {selectedIngredient.minStock} {selectedIngredient.unit}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="waste-quantity" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Quantity *
+              </label>
+              <input
+                id="waste-quantity"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formState.quantity}
+                onChange={(event) => handleInputChange('quantity', event.target.value)}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter quantity lost"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="waste-unit" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Unit *
+              </label>
+              <input
+                id="waste-unit"
+                type="text"
+                value={formState.unit}
+                onChange={(event) => handleInputChange('unit', event.target.value)}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. kg, pcs"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="waste-reason-select" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Reason *
+            </label>
+            <select
+              id="waste-reason-select"
+              value={formState.reason}
+              onChange={(event) => handleInputChange('reason', event.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              {reasons.map((reason) => (
+                <option key={reason.value} value={reason.value}>
+                  {reason.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="waste-order" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Linked Order (optional)
+            </label>
+            <select
+              id="waste-order"
+              value={formState.orderId}
+              onChange={(event) => handleInputChange('orderId', event.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No linked order</option>
+              {orders.slice(0, 50).map((order) => (
+                <option key={order.id} value={order.id}>
+                  {order.order_number} — {order.customer_name || 'Walk-in'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="waste-notes" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Notes (optional)
+            </label>
+            <textarea
+              id="waste-notes"
+              value={formState.notes}
+              onChange={(event) => handleInputChange('notes', event.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Add context about what happened"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="waste-photo" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Photo URL (optional)
+            </label>
+            <input
+              id="waste-photo"
+              type="url"
+              value={formState.photoUrl}
+              onChange={(event) => handleInputChange('photoUrl', event.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://example.com/photo.jpg"
+            />
+          </div>
+
+          {formError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-700">{formError}</p>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 touch-manipulation min-h-[44px]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-3 sm:px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Waste Report'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

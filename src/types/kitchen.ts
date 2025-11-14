@@ -150,3 +150,92 @@ export interface PaginatedKitchenResponse {
     total_pages: number;
   };
 }
+
+export interface WasteReportPayload {
+  ingredientId: string;
+  quantity: number;
+  unit: string;
+  reason: string;
+  orderId?: string;
+  notes?: string;
+  photoUrl?: string;
+}
+
+export interface WasteReport {
+  id: string;
+  ingredient_id: string;
+  order_id?: string | null;
+  quantity: number;
+  unit: string;
+  reason: string;
+  cost_impact: number;
+  reported_by: string;
+  status: 'pending' | 'approved' | 'rejected' | 'resolved';
+  notes?: string | null;
+  photo_url?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  ingredient: {
+    id: string;
+    name: string;
+    unit: string;
+    cost_per_unit: number;
+    current_stock: number;
+    min_stock_threshold: number;
+  };
+  reported_by_user: {
+    id: string;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  resolved_by_user?: {
+    id: string;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+  } | null;
+  order?: {
+    id: string;
+    status: string;
+    order_number: string;
+  } | null;
+}
+
+export interface WasteReportFilters {
+  page?: number;
+  limit?: number;
+  status?: string;
+  reason?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface WasteReportUpdatePayload {
+  status?: 'pending' | 'approved' | 'rejected' | 'resolved';
+  notes?: string;
+}
+
+export interface WasteAnalytics {
+  totalReports: number;
+  totalQuantity: number;
+  totalCostImpact: number;
+  byReason: Array<{
+    reason: string;
+    count: number;
+    quantity: number;
+    costImpact: number;
+  }>;
+  byStatus: Array<{
+    status: string;
+    count: number;
+    quantity: number;
+    costImpact: number;
+  }>;
+  recentTrend: Array<{
+    date: string;
+    count: number;
+    costImpact: number;
+  }>;
+}
