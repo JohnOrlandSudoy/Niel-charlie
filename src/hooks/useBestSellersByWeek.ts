@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { BestSellerItem, BestSellersResponse } from '../types/sales';
 import { parseJsonResponse, directApiRequest } from '../utils/api';
 
-export const useBestSellersByWeek = (week?: number, year?: number, limit: number = 10) => {
+export const useBestSellersByWeek = (week: number, year: number, limit: number = 10) => {
   const [bestSellers, setBestSellers] = useState<BestSellerItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,26 +17,19 @@ export const useBestSellersByWeek = (week?: number, year?: number, limit: number
         setIsLoading(true);
         setError(null);
 
-        let response: Response;
-        if (typeof week === 'number' && typeof year === 'number') {
-          const params = new URLSearchParams({
-            week: week.toString(),
-            year: year.toString(),
-            limit: limit.toString(),
-            offset: ((currentPage - 1) * limit).toString()
-          });
-          response = await directApiRequest(`/admin/sales/best-sellers/week?${params.toString()}`, {
+        const params = new URLSearchParams({
+          week: week.toString(),
+          year: year.toString(),
+          limit: limit.toString(),
+          offset: ((currentPage - 1) * limit).toString()
+        });
+
+        const response = await directApiRequest(
+          `/api/admin/sales/best-sellers/week?${params.toString()}`,
+          {
             method: 'GET'
-          });
-        } else {
-          const params = new URLSearchParams({
-            limit: limit.toString(),
-            offset: ((currentPage - 1) * limit).toString()
-          });
-          response = await directApiRequest(`/admin/sales/best-sellers?${params.toString()}`, {
-            method: 'GET'
-          });
-        }
+          }
+        );
 
         if (!response.ok) {
           try {

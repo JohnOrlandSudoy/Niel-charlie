@@ -9,42 +9,35 @@ interface BestSellersModalProps {
 }
 
 // Helper function to get current ISO week
-const getISOWeek = (date: Date): number => {
-  const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = tmp.getUTCDay() || 7;
-  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-  return Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-};
-
-const getISOWeekYear = (date: Date): number => {
-  const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = tmp.getUTCDay() || 7;
-  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
-  return tmp.getUTCFullYear();
+const getCurrentWeek = (): number => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const diff = now.getTime() - start.getTime();
+  const oneWeek = 1000 * 60 * 60 * 24 * 7;
+  return Math.floor(diff / oneWeek) + 1;
 };
 
 const BestSellersModal: React.FC<BestSellersModalProps> = ({ isOpen, onClose }) => {
-  const [week, setWeek] = useState<number | undefined>(getISOWeek(new Date()));
-  const [year, setYear] = useState<number | undefined>(new Date().getFullYear());
+  const [week, setWeek] = useState(getCurrentWeek());
+  const [year, setYear] = useState(new Date().getFullYear());
   const { bestSellers, isLoading, error, total, pages, currentPage, setPage } = useBestSellersByWeek(week, year, 10);
 
   const handlePrevWeek = () => {
-    if (typeof week === 'number' && week > 1) {
+    if (week > 1) {
       setWeek(week - 1);
     } else {
       setWeek(53);
-      setYear(typeof year === 'number' ? year - 1 : new Date().getFullYear());
+      setYear(year - 1);
     }
     setPage(1);
   };
 
   const handleNextWeek = () => {
-    if (typeof week === 'number' && week < 53) {
+    if (week < 53) {
       setWeek(week + 1);
     } else {
       setWeek(1);
-      setYear(typeof year === 'number' ? year + 1 : new Date().getFullYear());
+      setYear(year + 1);
     }
     setPage(1);
   };
@@ -95,7 +88,7 @@ const BestSellersModal: React.FC<BestSellersModalProps> = ({ isOpen, onClose }) 
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-gray-600" />
-              <span className="font-medium">{typeof week === 'number' && typeof year === 'number' ? `Week ${week}, ${year}` : 'Current week'}</span>
+              <span className="font-medium">Week {week}, {year}</span>
             </div>
             <div className="flex items-center space-x-2">
               <button
@@ -112,52 +105,6 @@ const BestSellersModal: React.FC<BestSellersModalProps> = ({ isOpen, onClose }) 
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
-              <div className="flex items-center space-x-2 ml-4">
-                <input
-                  type="number"
-                  min={1}
-                  max={53}
-                  value={typeof week === 'number' ? week : ''}
-                  onChange={(e) => { const v = e.target.value ? Number(e.target.value) : undefined; setWeek(v); setPage(1); }}
-                  placeholder="Week"
-                  className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm"
-                  title="Set ISO week"
-                />
-                <input
-                  type="number"
-                  min={2000}
-                  max={2100}
-                  value={typeof year === 'number' ? year : ''}
-                  onChange={(e) => { const v = e.target.value ? Number(e.target.value) : undefined; setYear(v); setPage(1); }}
-                  placeholder="Year"
-                  className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm"
-                  title="Set year"
-                />
-                <input
-                  type="date"
-                  onChange={(e) => {
-                    if (!e.target.value) { setWeek(undefined); setYear(undefined); setPage(1); return; }
-                    const d = new Date(e.target.value);
-                    setWeek(getISOWeek(d));
-                    setYear(getISOWeekYear(d));
-                    setPage(1);
-                  }}
-                  className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-                  title="Pick date to derive week/year"
-                />
-                <input
-                  type="datetime-local"
-                  onChange={(e) => {
-                    if (!e.target.value) { setWeek(undefined); setYear(undefined); setPage(1); return; }
-                    const d = new Date(e.target.value);
-                    setWeek(getISOWeek(d));
-                    setYear(getISOWeekYear(d));
-                    setPage(1);
-                  }}
-                  className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-                  title="Pick date/time to derive week/year"
-                />
-              </div>
               <button
                 onClick={handleExport}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition ml-4"

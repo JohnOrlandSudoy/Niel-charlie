@@ -1,16 +1,16 @@
 // src/hooks/useSalesRecords.ts
 import { useState, useEffect } from 'react';
 import { SalesRecord, SalesRecordsResponse } from '../types/sales';
-import { parseJsonResponse, directApiRequest } from '../utils/api';
+import { parseJsonResponse } from '../utils/api';
 
 export interface UseSalesRecordsParams {
   page?: number;
   limit?: number;
-  menuItemId?: string;
-  startDate?: string;
-  endDate?: string;
-  paymentStatus?: 'paid' | 'unpaid' | 'refunded';
-  paymentMethod?: 'cash' | 'gcash' | 'card' | 'paymongo';
+  menu_item_id?: string;
+  start_date?: string;
+  end_date?: string;
+  sort_by?: string;
+  sort_order?: string;
 }
 
 export const useSalesRecords = (params: UseSalesRecordsParams = {}) => {
@@ -30,24 +30,26 @@ export const useSalesRecords = (params: UseSalesRecordsParams = {}) => {
         setIsLoading(true);
         setError(null);
 
-        const baseParams: Record<string, string> = {
+        const searchParams = new URLSearchParams({
           page: (params.page || 1).toString(),
           limit: (params.limit || 50).toString(),
-        };
-        if (params.menuItemId) baseParams.menuItemId = params.menuItemId;
-        if (params.paymentStatus) baseParams.paymentStatus = params.paymentStatus;
-        if (params.paymentMethod) baseParams.paymentMethod = params.paymentMethod;
-        if (params.startDate) baseParams.startDate = params.startDate;
-        if (params.endDate) baseParams.endDate = params.endDate;
+          ...(params.menu_item_id && { menu_item_id: params.menu_item_id }),
+          ...(params.start_date && { start_date: params.start_date }),
+          ...(params.end_date && { end_date: params.end_date }),
+          ...(params.sort_by && { sort_by: params.sort_by }),
+          ...(params.sort_order && { sort_order: params.sort_order })
+        });
 
-        const searchParams = new URLSearchParams(baseParams);
-
-        const useRangeEndpoint = !!(params.startDate && params.endDate);
-        const endpoint = useRangeEndpoint
-          ? `/admin/sales/records/range?${searchParams.toString()}`
-          : `/admin/sales/records?${searchParams.toString()}`;
-
-        const response = await directApiRequest(endpoint, { method: 'GET' });
+        const response = await fetch(
+          `/api/admin/sales/records?${searchParams.toString()}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+            }
+          }
+        );
 
         if (!response.ok) {
           try {
@@ -77,13 +79,13 @@ export const useSalesRecords = (params: UseSalesRecordsParams = {}) => {
 
     fetchRecords();
   }, [
-    params.page,
-    params.limit,
-    params.menuItemId,
-    params.startDate,
-    params.endDate,
-    params.paymentStatus,
-    params.paymentMethod,
+    params.page, 
+    params.limit, 
+    params.menu_item_id, 
+    params.start_date, 
+    params.end_date,
+    params.sort_by,
+    params.sort_order
   ]);
 
   return { 

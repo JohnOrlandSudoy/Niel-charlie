@@ -5,9 +5,8 @@ import { WasteReportFilters, WasteReportPayload, WasteReportUpdatePayload } from
 
 // Resolve API base URL for dev/prod
 const API_BASE_URL = (
-  // Prefer localhost in development to avoid hitting production accidentally
   (typeof window !== 'undefined' && window.location.hostname === 'localhost')
-    ? 'http://localhost:3000/api'
+    ? '/api'
     : (
         (typeof config?.api?.baseUrl === 'string' && config.api.baseUrl)
         || 'https://server-resturant-3.onrender.com/api'
@@ -51,9 +50,7 @@ export const directApiRequest = async (
   console.log('- Token exists:', !!token);
   console.log('- Token value:', token ? `${token.substring(0, 20)}...` : 'null');
   
-  const defaultHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  const defaultHeaders: HeadersInit = {};
 
   if (token) {
     defaultHeaders.Authorization = `Bearer ${token}`;
@@ -69,6 +66,12 @@ export const directApiRequest = async (
       ...options.headers,
     },
   };
+  if (!config.method || (config.method !== 'GET' && config.method !== 'HEAD')) {
+    config.headers = {
+      'Content-Type': 'application/json',
+      ...(config.headers as HeadersInit),
+    };
+  }
 
   // Build full URL robustly to avoid accidental duplicate '/api' segments.
   const baseClean = API_BASE_URL.replace(/\/$/, ''); // remove trailing slash

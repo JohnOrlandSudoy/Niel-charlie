@@ -8,7 +8,7 @@ interface BestSellersCardProps {
 }
 
 const BestSellersCard: React.FC<BestSellersCardProps> = ({ onViewMore }) => {
-  const { bestSellers, isLoading, error, week, year } = useBestSellers(5);
+  const { bestSellers, isLoading, error } = useBestSellers(5);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -19,7 +19,7 @@ const BestSellersCard: React.FC<BestSellersCardProps> = ({ onViewMore }) => {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Best Sellers</h3>
-            <p className="text-xs text-gray-500">Week {week}, {year}</p>
+            <p className="text-xs text-gray-500">Current week</p>
           </div>
         </div>
         {onViewMore && (
@@ -65,7 +65,7 @@ const BestSellersCard: React.FC<BestSellersCardProps> = ({ onViewMore }) => {
                     maximumFractionDigits: 0,
                   })}
                 </p>
-                <p className="text-xs text-emerald-600">Avg: {item.average_daily_sales}/day</p>
+                <p className="text-xs text-emerald-600">+{item.total_quantity}</p>
               </div>
             </div>
           ))}

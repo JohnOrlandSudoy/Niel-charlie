@@ -35,16 +35,13 @@ const RecentOrders: React.FC<RecentOrdersProps> = ({ onViewAllOrders }) => {
   };
 
   const getOrderItems = (order: ApiOrder) => {
-    if (!order.items || order.items.length === 0) return 'No items';
-    
+    if (!order.items || order.items.length === 0) return '';
     const itemNames = order.items.slice(0, 2).map(item => 
       `${item.menu_item?.name || 'Unknown Item'} x${item.quantity}`
     );
-    
     if (order.items.length > 2) {
       itemNames.push(`+${order.items.length - 2} more`);
     }
-    
     return itemNames.join(', ');
   };
 
@@ -115,42 +112,48 @@ const RecentOrders: React.FC<RecentOrdersProps> = ({ onViewAllOrders }) => {
       </div>
 
       <div className="space-y-3 sm:space-y-4">
-        {recentOrders.length > 0 ? recentOrders.map((order) => (
-          <div
-            key={order.id}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200 touch-manipulation"
-          >
-            <div className="flex-1 mb-3 sm:mb-0">
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="font-medium text-gray-900 text-sm sm:text-base">{order.order_number}</span>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
-                  {order.status}
-                </span>
-                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
-                  {order.order_type.replace('_', ' ')}
-                </span>
-                {order.payment_status === 'paid' && (
-                  <span className="px-2 py-1 text-xs bg-green-100 text-green-600 rounded-full">
-                    Paid
+        {recentOrders.length > 0 ? recentOrders.map((order) => {
+          const itemsText = getOrderItems(order);
+          return (
+            <div
+              key={order.id}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200 touch-manipulation"
+            >
+              <div className="flex-1 mb-3 sm:mb-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="font-medium text-gray-900 text-sm sm:text-base">{order.order_number}</span>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                    {order.status}
                   </span>
+                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                    {order.order_type.replace('_', ' ')}
+                  </span>
+                  {order.payment_status === 'paid' && (
+                    <span className="px-2 py-1 text-xs bg-green-100 text-green-600 rounded-full">
+                      Paid
+                    </span>
+                  )}
+                </div>
+                
+                <p className="text-sm text-gray-600 mb-1">
+                  {order.customer_name || 'Walk-in Customer'}
+                </p>
+                {itemsText && (
+                  <p className="text-xs text-gray-500">{itemsText}</p>
                 )}
               </div>
-              
-              <p className="text-sm text-gray-600 mb-1">
-                {order.customer_name || 'Walk-in Customer'}
-              </p>
-              <p className="text-xs text-gray-500">{getOrderItems(order)}</p>
-            </div>
 
-            <div className="flex items-center justify-between sm:flex-col sm:text-right">
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{formatCurrency(order.total_amount)}</p>
-              <div className="flex items-center space-x-1">
-                {getStatusIcon(order.status)}
-                <span className="text-xs text-gray-500">{formatTimeAgo(order.created_at)}</span>
+              <div className="flex items-center justify-between sm:flex-col sm:text-right">
+                <p className="font-semibold text-gray-900 text-sm sm:text-base">{formatCurrency(order.total_amount)}</p>
+                <div className="flex items-center space-x-1">
+                  {getStatusIcon(order.status)}
+                  <span className="text-xs text-gray-500">{formatTimeAgo(order.created_at)}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{new Date(order.created_at).toLocaleString()}</p>
               </div>
             </div>
-          </div>
-        )) : (
+          );
+        }) : (
           <div className="text-center py-6 sm:py-8">
             <p className="text-sm sm:text-base text-gray-500">No recent orders found</p>
             <p className="text-xs sm:text-sm text-gray-400 mt-1">Orders will appear here as they come in</p>

@@ -17,8 +17,7 @@ import {
   Trash2,
   PlusCircle,
   Filter,
-  BarChart3,
-  ShieldCheck
+  BarChart3
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { 
@@ -87,26 +86,11 @@ const getStockStatusColor = (status: string) => {
 
 const WASTE_REASON_OPTIONS = [
   { value: 'spoilage', label: 'Spoilage' },
-  { value: 'overproduction', label: 'Overproduction' },
-  { value: 'prep_error', label: 'Preparation Error' },
-  { value: 'contamination', label: 'Contamination' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'other', label: 'Other' }
+  { value: 'spillage', label: 'Spillage' },
+  { value: 'waste', label: 'Waste' },
 ];
 
-const getWasteStatusColor = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'bg-amber-100 text-amber-800 border border-amber-200';
-    case 'approved':
-    case 'resolved':
-      return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
-    case 'rejected':
-      return 'bg-rose-100 text-rose-700 border border-rose-200';
-    default:
-      return 'bg-gray-100 text-gray-700 border border-gray-200';
-  }
-};
+// Removed status color helper as status UI is no longer displayed
 
 const KitchenDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -150,7 +134,6 @@ const KitchenDashboard: React.FC = () => {
   const [isSubmittingWasteReport, setIsSubmittingWasteReport] = useState(false);
   const [wasteAnalytics, setWasteAnalytics] = useState<WasteAnalytics | null>(null);
   const [isLoadingWasteAnalytics, setIsLoadingWasteAnalytics] = useState(false);
-  const [updatingWasteReportId, setUpdatingWasteReportId] = useState<string | null>(null);
 
   // Fetch kitchen orders from API - Memoized for performance
   const fetchKitchenOrders = useCallback(async () => {
@@ -514,45 +497,7 @@ const KitchenDashboard: React.FC = () => {
     [fetchWasteReports, addNotification]
   );
 
-  const handleWasteReportStatusUpdate = useCallback(
-    async (wasteReportId: string, updates: WasteReportUpdatePayload) => {
-      try {
-        setUpdatingWasteReportId(wasteReportId);
-        setWasteError(null);
-        const response = await api.kitchen.updateWasteReport(wasteReportId, updates);
-        const result: ApiResponse<WasteReport> = await response.json();
-
-        if (result.success && result.data) {
-          setWasteReports(prev =>
-            prev.map(report => (report.id === wasteReportId ? result.data! : report))
-          );
-          if (updates.status === 'resolved') {
-            addNotification('Waste report marked as resolved.');
-          } else {
-            addNotification('Waste report updated.');
-          }
-          await fetchWasteReports();
-          if (wasteFilters.startDate && wasteFilters.endDate) {
-            fetchWasteAnalytics();
-          }
-          return { success: true };
-        }
-
-        const message = result.message || 'Failed to update waste report';
-        setWasteError(message);
-        return { success: false, message };
-      } catch (err) {
-        console.error('Error updating waste report:', err);
-        const message = err instanceof Error ? err.message : 'Failed to update waste report. Please try again.';
-        setWasteError(message);
-        return { success: false, message };
-      }
-      finally {
-        setUpdatingWasteReportId(null);
-      }
-    },
-    [addNotification, fetchWasteAnalytics, fetchWasteReports, wasteFilters.endDate, wasteFilters.startDate]
-  );
+  // Removed status update handler and related state as status actions are not displayed
 
 
   useEffect(() => {
@@ -1035,8 +980,6 @@ const KitchenDashboard: React.FC = () => {
               onResetFilters={resetWasteFilters}
               onRefresh={fetchWasteReports}
               onCreateReport={() => setIsWasteFormOpen(true)}
-              onResolveReport={(id) => handleWasteReportStatusUpdate(id, { status: 'resolved' })}
-              updatingReportId={updatingWasteReportId}
               analytics={wasteAnalytics}
               isLoadingAnalytics={isLoadingWasteAnalytics}
               error={wasteError}
@@ -1636,8 +1579,6 @@ interface WasteReportsTabProps {
   onResetFilters: () => void;
   onRefresh: () => void;
   onCreateReport: () => void;
-  onResolveReport: (id: string) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
-  updatingReportId: string | null;
   analytics: WasteAnalytics | null;
   isLoadingAnalytics: boolean;
   error?: string | null;
@@ -1651,15 +1592,12 @@ const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
   onResetFilters,
   onRefresh,
   onCreateReport,
-  onResolveReport,
-  updatingReportId,
   analytics,
   isLoadingAnalytics,
   error
 }) => {
   const hasActiveFilters = useMemo(
     () =>
-      filters.status !== 'all' ||
       filters.reason !== 'all' ||
       Boolean(filters.startDate) ||
       Boolean(filters.endDate),
@@ -1771,7 +1709,7 @@ const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
           <Filter className="h-4 w-4" />
           <span>Filters</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label htmlFor="waste-reason" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Reason
@@ -1788,23 +1726,6 @@ const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
                   {reason.label}
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="waste-status" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-              Status
-            </label>
-            <select
-              id="waste-status"
-              value={filters.status}
-              onChange={(event) => onFilterChange({ status: event.target.value })}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="resolved">Resolved</option>
-              <option value="rejected">Rejected</option>
             </select>
           </div>
           <div>
@@ -1881,9 +1802,7 @@ const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
                     </p>
                   </div>
                 </div>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getWasteStatusColor(report.status)}`}>
-                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                </span>
+                {/* Status badge removed */}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-600">
                 <div>
@@ -1933,20 +1852,7 @@ const WasteReportsTab: React.FC<WasteReportsTabProps> = ({
                   Linked order: <span className="font-medium text-gray-700">{report.order.order_number}</span>
                 </div>
               )}
-              <div className="mt-4 flex flex-col sm:flex-row sm:justify-end gap-2">
-                {report.status !== 'resolved' && (
-                  <button
-                    onClick={async () => {
-                      await onResolveReport(report.id);
-                    }}
-                    disabled={updatingReportId === report.id}
-                    className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 touch-manipulation min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>{updatingReportId === report.id ? 'Resolving…' : 'Mark Resolved'}</span>
-                  </button>
-                )}
-              </div>
+              {/* Status action removed */}
             </div>
             );
           })

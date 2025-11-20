@@ -15,7 +15,7 @@ export const useBestSellers = (limit: number = 10) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await directApiRequest(`/admin/sales/best-sellers?limit=${limit}`, {
+      const response = await directApiRequest(`/api/admin/sales/best-sellers?limit=${limit}`, {
         method: 'GET'
       });
 

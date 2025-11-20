@@ -9,7 +9,7 @@ import InventoryAlerts from './InventoryAlerts';
 import StockUsageChart from './StockUsageChart';
 import BestSellersCard from './BestSellersCard';
 import BestSellersModal from './BestSellersModal';
-import RevenueAnalytics from './RevenueAnalytics';
+
 
 interface DashboardProps {
   onNavigateToInventory?: () => void;
@@ -69,10 +69,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToInventory, onNavigate
         <SalesChart />
       </div>
 
-      {/* Revenue Analytics */}
-      <div className="grid grid-cols-1 gap-4 sm:gap-6">
-        <RevenueAnalytics />
-      </div>
+
 
       {/* Best Sellers Card */}
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
